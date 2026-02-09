@@ -5,7 +5,8 @@ const CodePointIterator = @import("code_point").Iterator;
 const ascii = @import("ascii");
 
 const util = @import("util.zig");
-const Panels = @import("window.zig").Panels;
+const window = @import("window.zig");
+const Panels = window.Panels;
 const FixedString = @import("render.zig").FixedString;
 const pers_alloc = @import("allocators.zig").persistentAllocator;
 
@@ -20,12 +21,13 @@ pub const Width = struct {
     cells: usize,
 };
 
-const Which_Cache = enum {
+pub const Which_Cache = enum {
     queue,
     col1,
     col2,
     col3,
-    playing,
+    title,
+    album_artist,
 };
 
 const Cache = struct {
@@ -37,8 +39,10 @@ const Cache = struct {
     c2w: usize,
     col3: HashQueue(queue_cache_size),
     c3w: usize,
-    playing: HashQueue(playing_cache_size),
-    pw: usize,
+    title: HashQueue(playing_cache_size),
+    title_w: usize,
+    album_artist: HashQueue(playing_cache_size),
+    album_artist_w: usize,
 
     fn init(allocator: Allocator, panels: Panels) Cache {
         return Cache{
@@ -50,8 +54,10 @@ const Cache = struct {
             .c2w = panels.browse2.validArea().xlen,
             .col3 = HashQueue(queue_cache_size).init(allocator),
             .c3w = panels.browse3.validArea().xlen,
-            .playing = HashQueue(playing_cache_size).init(allocator),
-            .pw = panels.curr_song.validArea().xlen,
+            .title = HashQueue(playing_cache_size).init(allocator),
+            .title_w = panels.curr_song.validArea().xlen,
+            .album_artist = HashQueue(playing_cache_size).init(allocator),
+            .album_artist_w = (panels.curr_song.validArea().xlen - window.CURRENT_SONG_PLAYSTATE_WIDTH - window.CURRENT_SONG_CLOCK_WIDTH),
         };
     }
 };
@@ -74,7 +80,8 @@ pub fn getDisplayWidth(str: []const u8, which: Which_Cache) Allocator.Error!Widt
         .col1 => getWidthFromCache(queue_cache_size, &cache.col1, cache.c1w, str),
         .col2 => getWidthFromCache(queue_cache_size, &cache.col2, cache.c2w, str),
         .col3 => getWidthFromCache(queue_cache_size, &cache.col3, cache.c3w, str),
-        .playing => getWidthFromCache(playing_cache_size, &cache.playing, cache.pw, str),
+        .title => getWidthFromCache(playing_cache_size, &cache.title, cache.title_w, str),
+        .album_artist => getWidthFromCache(playing_cache_size, &cache.album_artist, cache.album_artist_w, str),
     };
 }
 

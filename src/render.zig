@@ -206,8 +206,9 @@ fn queueRender(
     var item = iterator.next(inc);
     if (item == null) {
         try clear(area);
-        try term.moveCursor(area.ylen / 2, area.xlen / 2);
-        try writeLineCenter("queue empty", area.ylen / 2, area.xmin, area.xmax);
+        const msg = "queue empty";
+        try term.moveCursor(area.ylen / 2, (area.xlen / 2) - msg.len);
+        try term.writeAll(msg);
         return;
     }
 
@@ -317,20 +318,20 @@ fn writeQueueLine(area: window.Area, row: usize, song: mpd.QSong, time: u16, wa:
 }
 
 // Higher-level rendering functions
-pub fn writeLineCenter(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
+pub fn writeTitle(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
     const panel_width = xmax - xmin;
-    const width = try dw.getDisplayWidth(str, .playing);
+    const width = try dw.getDisplayWidth(str, .title);
     const x_pos = xmin + (panel_width -| width.cells) / 2;
     try term.moveCursor(y, x_pos);
-    try term.writeAll(str);
+    try term.writeAll(str[0..width.byte_offset]);
 }
 
-pub fn writeCenterBounded(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
+pub fn writeAlbumArtist(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
     const panel_width = xmax - xmin;
-    const width = try dw.getDisplayWidth(str, .playing);
+    const width = try dw.getDisplayWidth(str, .album_artist);
     const x_pos = xmin + @max(((panel_width -| width.cells) / 2), window.CURRENT_SONG_CLOCK_WIDTH);
     try term.moveCursor(y, x_pos);
-    try term.writeAll(str[0..@min(str.len, xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH - x_pos)]);
+    try term.writeAll(str[0..width.byte_offset]);
 }
 
 fn currTrackRender(
@@ -364,14 +365,14 @@ fn currTrackRender(
     }
 
     if (!current.first_render) {
-        try term.clearLine(ycent, xmin + 11, xmax);
+        try term.clearLine(ycent, xmin + window.CURRENT_SONG_CLOCK_WIDTH, xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH);
         try term.clearLine(ycent - 2, xmin, xmax);
     }
     try term.setColor(.magenta);
-    try writeCenterBounded(artist_alb, ycent, xmin, xmax);
+    try writeAlbumArtist(artist_alb, ycent, xmin, xmax);
     try term.setColor(.cyan);
     try term.setBold();
-    try writeLineCenter(title[0..@min(title.len, xmax)], ycent - 2, xmin, xmax);
+    try writeTitle(title, ycent - 2, xmin, xmax);
     try term.attributeReset();
     if (fr.*) fr.* = false;
 }
