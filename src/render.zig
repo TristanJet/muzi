@@ -92,7 +92,16 @@ pub const FixedString = struct {
     }
 };
 
-pub fn render(app: *state.State, render_state: *RenderState(n_browse_columns), panels: window.Panels, end_index: *usize) !void {
+const RenderError = error{
+    OutOfMemory,
+};
+
+pub fn render(
+    app: *state.State,
+    render_state: *RenderState(n_browse_columns),
+    panels: window.Panels,
+    end_index: *usize,
+) (fs.File.WriteError || mem.Allocator.Error || state.ColumnArray(n_browse_columns).Error)!void {
     current = app.*;
     if (render_state.borders) try drawBorders(panels.curr_song.area);
     if (render_state.borders) try drawBorders(panels.queue.area);
@@ -493,7 +502,7 @@ fn browseCursorRender(area: window.Area, strings_opt: ?[]const []const u8, prev_
 fn clearCursor(area: window.Area, strings_opt: ?[]const []const u8, pos: u8, inc: usize) !void {
     const strings = strings_opt orelse return;
     if (strings.len == 0) return;
-    if (pos >= area.ylen) return error.posOverflow;
+    debug.assert(pos < area.ylen);
     // Get the actual string to render
     const curr = strings[pos + inc];
 
@@ -541,7 +550,7 @@ fn findCursor(area: window.Area) !void {
     }
 }
 
-fn getQueueText(wa: mem.Allocator, viewend: usize, plen: usize) ![]const u8 {
+fn getQueueText(wa: mem.Allocator, viewend: usize, plen: usize) mem.Allocator.Error![]const u8 {
     return std.fmt.allocPrint(wa, "queue ({}/{})", .{ viewend, plen });
 }
 

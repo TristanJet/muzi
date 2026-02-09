@@ -150,21 +150,70 @@ fn getTty() !void {
     out = &writer.interface;
 }
 
+// lowest level write functions, should try again if wouldblock
+// I retry because of mac os. I don't know what the *correct* way to do this is.
+// I think I need to consider NOT using non-blocking sokcets and instead using kitty input protocol
+// also it's really wrong, this is barely a patch
+// maybe zig new IO interface reveals the answer
+
+const retry_sleep_time = 32000;
 pub fn flush() WriteError!void {
-    out.flush() catch return writer.err.?;
+    out.flush() catch switch (writer.err.?) {
+        WriteError.WouldBlock => {
+            for (0..3) |_| {
+                std.Thread.sleep(retry_sleep_time);
+                out.flush() catch continue;
+                return;
+            }
+            return writer.err.?;
+        },
+        else => return writer.err.?,
+    };
 }
 
 pub fn writeAll(str: []const u8) WriteError!void {
-    out.writeAll(str) catch return writer.err.?;
+    out.writeAll(str) catch switch (writer.err.?) {
+        WriteError.WouldBlock => {
+            for (0..3) |_| {
+                std.Thread.sleep(retry_sleep_time);
+                out.writeAll(str) catch continue;
+                return;
+            }
+            return writer.err.?;
+        },
+        else => return writer.err.?,
+    };
 }
 
 fn print(comptime fmt: []const u8, args: anytype) WriteError!void {
-    out.print(fmt, args) catch return writer.err.?;
+    out.print(fmt, args) catch switch (writer.err.?) {
+        WriteError.WouldBlock => {
+            for (0..3) |_| {
+                std.Thread.sleep(retry_sleep_time);
+                out.print(fmt, args) catch continue;
+                return;
+            }
+            return writer.err.?;
+        },
+        else => return writer.err.?,
+    };
 }
 
 pub fn writeByteNTimes(byte: u8, n: usize) !void {
-    for (0..n) |_| out.writeByte(byte) catch return writer.err.?;
+    for (0..n) |_| out.writeByte(byte) catch switch (writer.err.?) {
+        WriteError.WouldBlock => {
+            for (0..3) |_| {
+                std.Thread.sleep(retry_sleep_time);
+                out.writeByte(byte) catch continue;
+                return;
+            }
+            return writer.err.?;
+        },
+        else => return writer.err.?,
+    };
 }
+
+//
 
 pub fn fileDescriptor() fs.File.Handle {
     return tty.handle;
@@ -245,7 +294,7 @@ fn uncook() !void {
     try flush();
 }
 
-fn cook() !void {
+fn cook() (WriteError || posix.TermiosSetError)!void {
     try showCursor();
     try attributeReset();
 
@@ -256,24 +305,24 @@ fn cook() !void {
     try flush();
 }
 
-pub fn attributeReset() !void {
+pub fn attributeReset() WriteError!void {
     try writeAll("\x1B[0m");
     try setColor(.white);
 }
 
-pub fn setBold() !void {
+pub fn setBold() WriteError!void {
     try writeAll("\x1B[1m");
 }
 
-pub fn hideCursor() !void {
+pub fn hideCursor() WriteError!void {
     try writeAll("\x1B[?25l");
 }
 
-pub fn showCursor() !void {
+pub fn showCursor() WriteError!void {
     try writeAll("\x1B[?25h");
 }
 
-pub fn highlight() !void {
+pub fn highlight() WriteError!void {
     try writeAll("\x1B[7m");
 }
 
@@ -287,14 +336,14 @@ pub const Color = enum {
     magenta,
 };
 
-pub fn setColor(color: Color) !void {
+pub fn setColor(color: Color) WriteError!void {
     if (caps.truecolor)
         try trueColor(color)
     else
         try ansiColor(color);
 }
 
-fn ansiColor(color: Color) !void {
+fn ansiColor(color: Color) WriteError!void {
     const color_code: u16 = switch (color) {
         // .blue => 34,
         // .red => 31,
@@ -308,7 +357,7 @@ fn ansiColor(color: Color) !void {
     return try print("\x1B[{}m", .{color_code});
 }
 
-fn trueColor(color: Color) !void {
+fn trueColor(color: Color) WriteError!void {
     // Predefined RGB values for each named color
     const RGB = struct { r: u8, g: u8, b: u8 };
     const rgb: RGB = switch (color) {
@@ -322,19 +371,19 @@ fn trueColor(color: Color) !void {
     };
 
     // Format the true color ANSI sequence
-    return try print("\x1B[38;2;{};{};{}m", .{ rgb.r, rgb.g, rgb.b });
+    return print("\x1B[38;2;{};{};{}m", .{ rgb.r, rgb.g, rgb.b });
 }
 
 // Cursor and position control
-pub fn moveCursor(row: usize, col: usize) !void {
+pub fn moveCursor(row: usize, col: usize) WriteError!void {
     try print("\x1B[{};{}H", .{ row + 1, col + 1 });
 }
 
-pub fn clear() !void {
+pub fn clear() WriteError!void {
     try writeAll("\x1B[2J");
 }
 
-pub fn clearLine(y: usize, xmin: usize, xmax: usize) !void {
+pub fn clearLine(y: usize, xmin: usize, xmax: usize) WriteError!void {
     try moveCursor(y, xmin);
     const width = xmax - xmin + 1;
     try writeByteNTimes(' ', width);

@@ -61,14 +61,14 @@ fn getWidthFromCache(
     hash_queue: *HashQueue(capacity),
     max_width: usize,
     str: []const u8,
-) !Width {
-    if (hash_queue.contains(str)) return hash_queue.get(str) orelse return error.CacheError;
+) Allocator.Error!Width {
+    if (hash_queue.get(str)) |w| return w;
     const w: Width = lookupWidth(max_width, str);
     try hash_queue.put(str, w);
     return w;
 }
 
-pub fn getDisplayWidth(str: []const u8, which: Which_Cache) !Width {
+pub fn getDisplayWidth(str: []const u8, which: Which_Cache) Allocator.Error!Width {
     return switch (which) {
         .queue => getWidthFromCache(queue_cache_size, &cache.queue, cache.qw, str),
         .col1 => getWidthFromCache(queue_cache_size, &cache.col1, cache.c1w, str),
@@ -103,7 +103,7 @@ fn HashQueue(n_str: usize) type {
             self.map.deinit();
         }
 
-        pub fn put(self: *Self, key: []const u8, value: Width) !void {
+        pub fn put(self: *Self, key: []const u8, value: Width) Allocator.Error!void {
             if (self.map.contains(key)) {
                 // Update existing value
                 if (key.len > FixedString.MAX_LEN) {

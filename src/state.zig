@@ -618,6 +618,7 @@ pub const Browser = struct {
 
 pub fn ColumnArray(n_col: u8) type {
     return struct {
+        pub const Error = error{OutOfBounds};
         const Self = @This();
         buf: [n_col]BrowseColumn,
         index: u8,

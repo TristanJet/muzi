@@ -57,13 +57,15 @@ Let's freaking go
 ## TO 1.1
 - [x] FIXED: investigate segfault on find
 - [x] INTEGER OVERFLOW: G, fuck up queue
+- [x] patched macos
 - [ ] ESC bug
+
 - [ ] loop, shuffle etc.
 - [ ] volume display
 - [ ] browser handle no tags testing
 
 ## next update
-- [ ] **rewrite** - make maintaineable
+- [ ] Stop using nonblocking fd. look into epoll and kitty input protocol
 - [ ] make managed struct for lists?
 - [ ] handle the non blocking I/O properly ; worst case it blocks the whole terminal!
 - [ ] inc should not be in app.scroll_q
