@@ -58,11 +58,18 @@ Let's freaking go
 - [x] FIXED: investigate segfault on find
 - [x] INTEGER OVERFLOW: G, fuck up queue
 - [x] patched macos
-- [ ] ESC bug
-
-- [ ] loop, shuffle etc.
+- [ ] not playing, is interpreted as nosongs error, errors unhandled
+    - [ ] crashes when playlist ends
+- [ ] playing modes
+    - [ ] repeat
+    - [ ] random
+    - [ ] consume
+    - [ ] single
 - [ ] volume display
+
+## BUGS
 - [ ] browser handle no tags testing
+- [ ] ESC bug
 
 ## next update
 - [ ] Stop using nonblocking fd. look into epoll and kitty input protocol

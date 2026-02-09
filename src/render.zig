@@ -328,9 +328,9 @@ pub fn writeLineCenter(str: []const u8, y: usize, xmin: usize, xmax: usize) !voi
 pub fn writeCenterBounded(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
     const panel_width = xmax - xmin;
     const width = try dw.getDisplayWidth(str, .playing);
-    const x_pos = xmin + @max(((panel_width -| width.cells) / 2), 12); //HARD CODED SIZE OF CLOCK
+    const x_pos = xmin + @max(((panel_width -| width.cells) / 2), window.CURRENT_SONG_CLOCK_WIDTH);
     try term.moveCursor(y, x_pos);
-    try term.writeAll(str[0..@min(str.len, xmax - 12)]); //HARD CODED SIZE OF CLOCK
+    try term.writeAll(str[0..@min(str.len, xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH - x_pos)]);
 }
 
 fn currTrackRender(

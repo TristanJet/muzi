@@ -9,9 +9,10 @@ const fs = std.fs;
 const posix = std.posix;
 const math = std.math;
 
-// 12 for clock * 2 + 1 for borders
-pub const MIN_WIN_WIDTH = 27;
+pub const MIN_WIN_WIDTH = 36; // based on the queue header bar
 pub const MIN_WIN_HEIGHT = 12;
+pub const CURRENT_SONG_CLOCK_WIDTH = 12;
+pub const CURRENT_SONG_PLAYSTATE_WIDTH = 9;
 
 const y_len_ptr: *usize = &@import("input.zig").y_len;
 
