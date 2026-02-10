@@ -60,7 +60,8 @@ pub const MpdError = error{
     NoSongs,
     NotPlaying,
     BadIndex,
-    NoTime,
+    QueueEmpty,
+    MissingField,
 };
 
 /// Sends an MPD command and checks for OK response
@@ -214,13 +215,20 @@ pub const CurrentSong = struct {
     trackno: ?u16,
 };
 
-pub fn getCurrentSong(song: *CurrentSong, ra: mem.Allocator) !void {
-    var lines = try sendAndSplit("currentsong\n", ra);
+pub fn getCurrentSong(ra: mem.Allocator) !CurrentSong {
+    var lines = sendAndSplit("currentsong\n", ra) catch |e|
+        if (e == MpdError.NoSongs)
+            try sendAndSplit("playlistid 0\n", ra)
+        else
+            return e;
 
     var songuri: ?[]const u8 = null;
     var songtitle: ?[]const u8 = null;
     var songartist: ?[]const u8 = null;
     var songalbum: ?[]const u8 = null;
+    var trackno: ?u16 = null;
+    var pos: ?usize = null;
+    var id: ?usize = null;
 
     var bufend: u16 = 0;
     while (lines.next()) |line| {
@@ -251,20 +259,26 @@ pub fn getCurrentSong(song: *CurrentSong, ra: mem.Allocator) !void {
         } else if (mem.startsWith(u8, line, "Track:")) {
             const trackno_str = mem.trimLeft(u8, line[6..], " ");
             util.log("trackno: {s}", .{trackno_str});
-            song.trackno = try fmt.parseInt(u16, trackno_str, 10);
+            trackno = try fmt.parseInt(u16, trackno_str, 10);
         } else if (mem.startsWith(u8, line, "Pos:")) {
             const pos_str = mem.trimLeft(u8, line[4..], " ");
-            song.pos = try fmt.parseInt(usize, pos_str, 10);
+            pos = try fmt.parseInt(usize, pos_str, 10);
         } else if (mem.startsWith(u8, line, "Id:")) {
             const id_str = mem.trimLeft(u8, line[3..], " ");
-            song.id = try fmt.parseInt(usize, id_str, 10);
+            id = try fmt.parseInt(usize, id_str, 10);
         }
     }
 
-    song.uri = songuri orelse return error.NoUri;
-    song.title = songtitle;
-    song.artist = songartist;
-    song.album = songalbum;
+    return CurrentSong{
+        .uri = songuri orelse return MpdError.MissingField,
+        .pos = pos orelse return MpdError.MissingField,
+        .id = id orelse return MpdError.MissingField,
+        .title = songtitle,
+        .artist = songartist,
+        .album = songalbum,
+        .trackno = trackno,
+        .time = undefined,
+    };
 }
 
 pub const Time = struct {
@@ -287,7 +301,10 @@ pub fn currentTrackTime(ra: mem.Allocator) !Time {
             };
         }
     }
-    return MpdError.NoTime;
+    return .{
+        .elapsed = 0,
+        .duration = 0,
+    };
 }
 
 pub const Queue = struct {
@@ -313,7 +330,7 @@ pub const Queue = struct {
         const nsongs = util.nextPowerOfTwo(2 * nviewable);
         util.log("nsongs: {}", .{nsongs});
         debug.assert(nsongs >= 2 * nviewable);
-        const plen = try getPlaylistLen(respAllocator);
+        const plen = getPlaylistLen(respAllocator) catch 0;
         const bstart: usize = if (plen > nsongs) nviewable else 0;
         const bend: usize = if (plen > nsongs + nviewable) plen - nviewable else plen;
         return Queue{
@@ -707,10 +724,10 @@ pub fn getPlaylistLen(respAllocator: mem.Allocator) !usize {
     while (lines.next()) |line| {
         if (mem.startsWith(u8, line, "playlistlength:")) {
             const slice = mem.trimLeft(u8, line[15..], " ");
-            return try fmt.parseUnsigned(usize, slice, 10);
+            return fmt.parseUnsigned(usize, slice, 10);
         }
     }
-    return error.NoLength;
+    return MpdError.QueueEmpty;
 }
 
 pub fn getQueue(queue: *Queue, dir: Queue.Dir, ra: mem.Allocator, addsize: usize) !usize {
@@ -980,13 +997,13 @@ pub fn getPlayState(respAlloc: mem.Allocator) !bool {
     return is_playing;
 }
 
-fn sendAndSplit(command: []const u8, ra: mem.Allocator) !mem.SplitIterator(u8, .scalar) {
-    _ = posix.write(cmdStream.handle, command) catch return StreamError.WriteError;
+fn sendAndSplit(command: []const u8, ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError || posix.WriteError)!mem.SplitIterator(u8, .scalar) {
+    _ = try posix.write(cmdStream.handle, command);
     const bytes = try readCmd(ra);
     return mem.splitScalar(u8, bytes, '\n');
 }
 
-pub fn readCmd(ra: mem.Allocator) ![]u8 {
+pub fn readCmd(ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError)![]u8 {
     var buffer: std.ArrayList(u8) = .empty;
 
     while (true) {
@@ -1002,8 +1019,6 @@ pub fn readCmd(ra: mem.Allocator) ![]u8 {
     if (mem.startsWith(u8, buffer.items, "OK\n")) return MpdError.NoSongs;
     return buffer.items;
 }
-
-fn readNonBlock() ![]u8 {}
 
 const SongIterator = struct {
     buffer: []const u8,

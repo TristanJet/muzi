@@ -290,7 +290,7 @@ fn uncook() !void {
     // Enter alternate screen buffer
     try writeAll("\x1b[?1049h");
     try hideCursor();
-    try clear();
+    try clearScreen();
     try flush();
 }
 
@@ -379,7 +379,7 @@ pub fn moveCursor(row: usize, col: usize) WriteError!void {
     try print("\x1B[{};{}H", .{ row + 1, col + 1 });
 }
 
-pub fn clear() WriteError!void {
+pub fn clearScreen() WriteError!void {
     try writeAll("\x1B[2J");
 }
 

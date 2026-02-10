@@ -92,16 +92,12 @@ pub const FixedString = struct {
     }
 };
 
-const RenderError = error{
-    OutOfMemory,
-};
-
 pub fn render(
     app: *state.State,
     render_state: *RenderState(n_browse_columns),
     panels: window.Panels,
     end_index: *usize,
-) (fs.File.WriteError || mem.Allocator.Error || state.ColumnArray(n_browse_columns).Error)!void {
+) (fs.File.WriteError || mem.Allocator.Error || state.ColumnArray(n_browse_columns).Error || state.Error)!void {
     current = app.*;
     if (render_state.borders) try drawBorders(panels.curr_song.area);
     if (render_state.borders) try drawBorders(panels.queue.area);
@@ -110,8 +106,42 @@ pub fn render(
     if (render_state.borders or render_state.type or render_state.find) try drawHeader(panels.find.area, try getFindText(wrkallocator));
     if (render_state.currentTrack) try currTrackRender(wrkallocator, panels.curr_song, app.song, &app.first_render, end_index);
     if (render_state.bar) try barRender(panels.curr_song, app.song, wrkallocator);
-    if (render_state.queue) try queueRender(wrkallocator, panels.queue.validArea(), try app.queue.getIterator(), app.scroll_q.inc, app.queue.itopviewport + app.scroll_q.pos, app.visual_anchor_pos, app.input_state, app.song.id);
-    if (render_state.queueEffects and !render_state.queue) try queueEffectsRender(wrkallocator, panels.queue.validArea(), try app.queue.getIterator(), app.scroll_q.pos + app.queue.itopviewport, app.scroll_q.prev_pos + app.queue.itopviewport, app.visual_anchor_pos, app.scroll_q.inc, app.input_state, app.song.id, app.prev_id);
+    if (render_state.queue) {
+        if (app.queue.pl_len == 0) {
+            try emptyQueueRender(panels.queue.validArea());
+        } else {
+            const song = app.song orelse return state.Error.NoCurrentSong;
+            try queueRender(
+                wrkallocator,
+                panels.queue.validArea(),
+                try app.queue.getIterator(),
+                app.scroll_q.inc,
+                app.queue.itopviewport + app.scroll_q.pos,
+                app.visual_anchor_pos,
+                app.input_state,
+                song.id,
+            );
+        }
+    }
+    if (render_state.queueEffects and !render_state.queue) {
+        if (app.queue.pl_len == 0) {
+            try emptyQueueRender(panels.queue.validArea());
+        } else {
+            const song = app.song orelse return state.Error.NoCurrentSong;
+            try queueEffectsRender(
+                wrkallocator,
+                panels.queue.validArea(),
+                try app.queue.getIterator(),
+                app.scroll_q.pos + app.queue.itopviewport,
+                app.scroll_q.prev_pos + app.queue.itopviewport,
+                app.visual_anchor_pos,
+                app.scroll_q.inc,
+                app.input_state,
+                song.id,
+                app.prev_id,
+            );
+        }
+    }
     if (render_state.find) try findRender(panels.find.validArea());
     if (render_state.find_cursor) try findCursor(panels.find.validArea());
     if (render_state.find_clear) try clear(panels.find.validArea());
@@ -192,6 +222,13 @@ fn formatSeconds(allocator: mem.Allocator, seconds: u16) ![]const u8 {
     );
 }
 
+fn emptyQueueRender(area: window.Area) !void {
+    try clear(area);
+    const msg = "queue empty";
+    try term.moveCursor(area.ylen / 2, (area.xlen / 2) - msg.len);
+    try term.writeAll(msg);
+}
+
 fn queueRender(
     allocator: mem.Allocator,
     area: window.Area,
@@ -204,14 +241,7 @@ fn queueRender(
 ) !void {
     var iterator: QueueIterator = itq;
     var item = iterator.next(inc);
-    if (item == null) {
-        try clear(area);
-        const msg = "queue empty";
-        try term.moveCursor(area.ylen / 2, (area.xlen / 2) - msg.len);
-        try term.writeAll(msg);
-        return;
-    }
-
+    if (item == null) try emptyQueueRender(area);
     for (0..area.ylen) |i| {
         if (item) |x| {
             const should_highlight = switch (input_state) {
@@ -337,7 +367,7 @@ pub fn writeAlbumArtist(str: []const u8, y: usize, xmin: usize, xmax: usize) !vo
 fn currTrackRender(
     allocator: std.mem.Allocator,
     p: window.Panel,
-    s: *mpd.CurrentSong,
+    song: ?mpd.CurrentSong,
     fr: *bool,
     end_index: *usize,
 ) !void {
@@ -349,7 +379,13 @@ fn currTrackRender(
     const xmin = area.xmin;
     const xmax = area.xmax;
     const ycent = p.getYCentre();
-
+    if (song == null) {
+        try term.clearLine(ycent, xmin + window.CURRENT_SONG_CLOCK_WIDTH, xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH);
+        try term.clearLine(ycent - 2, xmin, xmax);
+        try writeTitle("muzi", ycent, xmin, xmax);
+        return;
+    }
+    const s: mpd.CurrentSong = song.?;
     const title: []const u8 = s.title orelse s.uri;
 
     var artist_alb: []const u8 = "";
@@ -377,23 +413,28 @@ fn currTrackRender(
     if (fr.*) fr.* = false;
 }
 
-fn barRender(panel: window.Panel, song: *mpd.CurrentSong, allocator: std.mem.Allocator) !void {
+fn barRender(panel: window.Panel, song: ?mpd.CurrentSong, allocator: std.mem.Allocator) !void {
     const area = panel.validArea();
+    if (song == null) {
+        try term.clearLine(area.ymax, area.xmin, area.xmax);
+        return;
+    }
+    const time: mpd.Time = song.?.time;
     const ycent = panel.getYCentre();
 
     const full_block = "\xe2\x96\x88"; // Unicode escape sequence for '█' (U+2588)
     const light_shade = "\xe2\x96\x92"; // Unicode escape sequence for '▒' (U+2592)
     // const light_shade: []const u8 = "#"; // Unicode escape sequence for '▒' (U+2592)
     const progress_width = area.xmax - area.xmin;
-    const progress_ratio = if (song.time.duration == 0) 0.0 else @as(f32, @floatFromInt(song.time.elapsed)) / @as(f32, @floatFromInt(song.time.duration));
+    const progress_ratio = if (time.duration == 0) 0.0 else @as(f32, @floatFromInt(time.elapsed)) / @as(f32, @floatFromInt(time.duration));
     const float_filled = progress_ratio * @as(f32, @floatFromInt(progress_width));
     const filled = if (float_filled < 0.0) 0 else if (float_filled > @as(f32, @floatFromInt(progress_width))) progress_width else @as(usize, @intFromFloat(float_filled));
 
     // Initialize bar if it's the first render
     if (current.bar_init) {
         //time
-        const elapsedTime = try formatSeconds(allocator, song.time.elapsed);
-        const duration = try formatSeconds(allocator, song.time.duration);
+        const elapsedTime = try formatSeconds(allocator, time.elapsed);
+        const duration = try formatSeconds(allocator, time.duration);
         const timeFormatted = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ elapsedTime, duration });
         try term.moveCursor(ycent, area.xmin);
         try term.writeAll(timeFormatted);
@@ -412,12 +453,12 @@ fn barRender(panel: window.Panel, song: *mpd.CurrentSong, allocator: std.mem.All
         return;
     }
 
-    if (song.time.elapsed != current.last_elapsed) {
-        current.last_elapsed = song.time.elapsed;
+    if (time.elapsed != current.last_elapsed) {
+        current.last_elapsed = time.elapsed;
 
         //time
-        const elapsedTime = try formatSeconds(allocator, song.time.elapsed);
-        const duration = try formatSeconds(allocator, song.time.duration);
+        const elapsedTime = try formatSeconds(allocator, time.elapsed);
+        const duration = try formatSeconds(allocator, time.duration);
         const timeFormatted = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ elapsedTime, duration });
         try term.moveCursor(ycent, area.xmin);
         try term.writeAll(timeFormatted);
@@ -559,8 +600,8 @@ fn getFindText(wa: mem.Allocator) ![]const u8 {
     return switch (current.input_state) {
         .normal_queue => try std.fmt.allocPrint(wa, "b{s}{s}find", .{ term.symbols.left_up, term.symbols.right_up }),
         .visual_queue => try std.fmt.allocPrint(wa, "b{s}{s}find", .{ term.symbols.left_up, term.symbols.right_up }),
-        .typing_find => try std.fmt.allocPrint(wa, "b{s}{s}find: {s}_", .{ term.symbols.left_up, term.symbols.right_up, current.typing_buffer.typed }),
+        .typing_find => try std.fmt.allocPrint(wa, "b{s}{s}find: {s}_", .{ term.symbols.left_up, term.symbols.right_up, current.typing_buffer.typed() }),
         .normal_browse => try std.fmt.allocPrint(wa, "f{s}{s}browse", .{ term.symbols.left_up, term.symbols.right_up }),
-        .typing_browse => try std.fmt.allocPrint(wa, "f{s}{s}browse: {s}_", .{ term.symbols.left_up, term.symbols.right_up, current.typing_buffer.typed }),
+        .typing_browse => try std.fmt.allocPrint(wa, "f{s}{s}browse: {s}_", .{ term.symbols.left_up, term.symbols.right_up, current.typing_buffer.typed() }),
     };
 }

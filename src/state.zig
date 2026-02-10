@@ -25,11 +25,15 @@ const ArrayList = std.ArrayList;
 pub const n_browse_columns: u4 = 3;
 pub const n_browse_matches = 10;
 
+pub const Error = error{
+    NoCurrentSong,
+};
+
 pub const State = struct {
     quit: bool,
     first_render: bool,
 
-    song: *mpd.CurrentSong,
+    song: ?mpd.CurrentSong,
     isPlaying: bool,
     last_second: i64,
     last_elapsed: u16,
@@ -861,27 +865,22 @@ pub const Idle = enum {
 };
 
 pub const TypingBuffer = struct {
-    buf: [32]u8,
-    typed: []const u8,
+    buf: [32]u8 = undefined,
+    n: usize = 0,
 
-    pub fn init(self: *TypingBuffer) void {
-        self.buf = undefined;
-        self.typed = self.buf[0..0];
-    }
-
-    pub fn reset(self: *TypingBuffer) void {
-        self.typed = self.buf[0..0];
+    pub fn typed(self: *const TypingBuffer) []const u8 {
+        return self.buf[0..self.n];
     }
 
     pub fn append(self: *TypingBuffer, char: u8) !void {
-        if (self.typed.len == self.buf.len) return error.BufferFull;
-        self.buf[self.typed.len] = char;
-        self.typed = self.buf[0 .. self.typed.len + 1];
+        if (self.n == self.buf.len) return error.BufferFull;
+        self.buf[self.n] = char;
+        self.n += 1;
     }
 
     pub fn pop(self: *TypingBuffer) !void {
-        if (self.typed.len == 0) return error.NoTyped;
-        self.typed = self.buf[0 .. self.typed.len - 1];
+        if (self.n == 0) return error.NoTyped;
+        self.n -= 1;
     }
 };
 
@@ -890,20 +889,29 @@ pub const BrowseCursorPos = struct {
     prev_pos: u8,
 };
 
-fn handleTime(time_: i64, app: *State, _render_state: *RenderState(n_browse_columns)) !void {
-    updateElapsed(time_, app, app, _render_state);
+fn handleTime(time_: i64, app: *State, render_state: *RenderState(n_browse_columns)) !void {
+    if (app.song) |*song| {
+        if (app.isPlaying) {
+            const current_second = @divTrunc(time_, 1000);
+            if (current_second > app.last_second) {
+                app.last_second = current_second;
+                song.time.elapsed += 1;
+                render_state.bar = true;
+            }
+        }
+    }
     try ping(time_, app);
 }
 
 fn handleIdle(idle_event: Idle, app: *State, render_state: *RenderState(n_browse_columns)) !void {
     switch (idle_event) {
         .player => {
-            app.prev_id = app.song.id;
-            try mpd.getCurrentSong(app.song, alloc.respAllocator);
-            log("song title: {s}", .{app.song.title orelse ""});
-            app.song.time = try mpd.currentTrackTime(alloc.respAllocator);
+            log("player event!", .{});
+            app.prev_id = if (app.song) |s| s.id else 0;
+            app.song = try mpd.getCurrentSong(alloc.respAllocator);
+            app.song.?.time = try mpd.currentTrackTime(alloc.respAllocator);
             app.isPlaying = try mpd.getPlayState(alloc.respAllocator);
-            app.last_elapsed = app.song.time.elapsed;
+            app.last_elapsed = app.song.?.time.elapsed;
             //lazy
             app.last_second = @divTrunc(time.milliTimestamp(), 1000);
             app.bar_init = true;
@@ -912,6 +920,14 @@ fn handleIdle(idle_event: Idle, app: *State, render_state: *RenderState(n_browse
             render_state.currentTrack = true;
         },
         .queue => {
+            log("queue event!", .{});
+            const prevlen = app.queue.pl_len;
+            if (prevlen == 0) {
+                app.song = try mpd.getCurrentSong(alloc.respAllocator);
+                app.song.?.time = try mpd.currentTrackTime(alloc.respAllocator);
+                render_state.currentTrack = true;
+                render_state.bar = true;
+            }
             try app.queue.reset(alloc.respAllocator);
 
             if (app.queue.pl_len > 0) {
@@ -925,23 +941,15 @@ fn handleIdle(idle_event: Idle, app: *State, render_state: *RenderState(n_browse
                 }
                 try app.queue.initialFill(alloc.respAllocator, alloc.persistentAllocator);
             } else {
+                app.song = null;
                 app.isPlaying = false;
+                render_state.currentTrack = true;
+                render_state.bar = true;
             }
 
             render_state.queue = true;
             render_state.queueEffects = true;
         },
-    }
-}
-
-fn updateElapsed(start: i64, crnt: *const State, app: *State, render_state: *RenderState(n_browse_columns)) void {
-    if (crnt.isPlaying) {
-        const current_second = @divTrunc(start, 1000);
-        if (current_second > crnt.last_second) {
-            app.song.time.elapsed += 1;
-            app.last_second = current_second;
-            render_state.bar = true;
-        }
     }
 }
 

@@ -23,9 +23,6 @@ const ArrayList = std.ArrayList;
 const target_fps = 60;
 const target_frame_time_ms = 1000 / target_fps;
 
-var initial_song: mpd.CurrentSong = undefined;
-var initial_typing: state.TypingBuffer = undefined;
-
 const wrkallocator = alloc.wrkallocator;
 const wrkfba = &alloc.wrkfba;
 const wrkbuf = &alloc.wrkbuf;
@@ -89,17 +86,22 @@ pub fn main() !void {
     try dw.init(alloc.persistentAllocator, window.panels);
     defer dw.deinit(alloc.persistentAllocator);
 
-    util.log("get current song", .{});
-    try mpd.getCurrentSong(&initial_song, alloc.respAllocator);
-    initial_song.time = try mpd.currentTrackTime(alloc.respAllocator);
-
     util.log("queue filling", .{});
     var initial_inc: usize = 0;
-    var queue: mpd.Queue = try mpd.Queue.init(alloc.respAllocator, alloc.persistentAllocator, window.panels.queue.validArea().ylen);
-    const initial_pos = if (queue.pl_len > 0) queue.jumpToPos(initial_song.pos, &initial_inc) else 0;
-    try queue.initialFill(alloc.respAllocator, alloc.persistentAllocator);
-
-    initial_typing.init();
+    var queue: mpd.Queue = try mpd.Queue.init(
+        alloc.respAllocator,
+        alloc.persistentAllocator,
+        window.panels.queue.validArea().ylen,
+    );
+    var song: ?mpd.CurrentSong = null;
+    var initial_pos: u8 = 0;
+    if (queue.pl_len > 0) {
+        try queue.initialFill(alloc.respAllocator, alloc.persistentAllocator);
+        util.log("get current song", .{});
+        song = try mpd.getCurrentSong(alloc.respAllocator);
+        song.?.time = try mpd.currentTrackTime(alloc.respAllocator);
+        initial_pos = queue.jumpToPos(song.?.pos, &initial_inc);
+    }
 
     var mpd_data = state.Data{
         .artists = null,
@@ -125,7 +127,7 @@ pub fn main() !void {
         .first_render = true,
 
         .prev_id = 0,
-        .song = &initial_song,
+        .song = song,
         .isPlaying = try mpd.getPlayState(alloc.respAllocator),
         .last_second = 0,
         .last_elapsed = 0,
@@ -145,7 +147,7 @@ pub fn main() !void {
         .jumppos = null,
         .visual_anchor_pos = null,
 
-        .typing_buffer = initial_typing,
+        .typing_buffer = .{},
         .find_cursor_pos = 0,
         .find_cursor_prev = 0,
         .viewable_searchable = null,
@@ -193,6 +195,8 @@ pub fn main() !void {
         const released_event: ?Event = try input.checkReleaseEvent(input_event);
         const idle_event: [2]?Event = try mpd.checkIdle();
         const time_event: Event = Event{ .time = loop_start_time };
+        if (idle_event[0]) |e| util.log("idle 1: {}", .{e});
+        if (idle_event[1]) |e| util.log("idle 2: {}", .{e});
 
         if (input_event) |event| app.appendEvent(event);
         if (released_event) |event| app.appendEvent(event);
