@@ -99,7 +99,6 @@ pub fn main() !void {
         try queue.initialFill(alloc.respAllocator, alloc.persistentAllocator);
         util.log("get current song", .{});
         song = try mpd.getCurrentSong(alloc.respAllocator);
-        song.?.time = try mpd.currentTrackTime(alloc.respAllocator);
         initial_pos = queue.jumpToPos(song.?.pos, &initial_inc);
     }
 

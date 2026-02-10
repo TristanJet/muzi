@@ -58,8 +58,8 @@ Let's freaking go
 - [x] FIXED: investigate segfault on find
 - [x] INTEGER OVERFLOW: G, fuck up queue
 - [x] patched macos
-- [ ] not playing, is interpreted as nosongs error, errors unhandled
-    - [ ] crashes when playlist ends
+- [x] BUG: not playing, is interpreted as nosongs error, errors unhandled
+    - [x] crashes when playlist ends
 - [ ] playing modes
     - [ ] repeat
     - [ ] random
@@ -72,6 +72,7 @@ Let's freaking go
 - [ ] ESC bug
 
 ## next update
+- [ ] clean up main.zig
 - [ ] Stop using nonblocking fd. look into epoll and kitty input protocol
 - [ ] make managed struct for lists?
 - [ ] handle the non blocking I/O properly ; worst case it blocks the whole terminal!

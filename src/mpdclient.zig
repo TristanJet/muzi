@@ -277,7 +277,7 @@ pub fn getCurrentSong(ra: mem.Allocator) !CurrentSong {
         .artist = songartist,
         .album = songalbum,
         .trackno = trackno,
-        .time = undefined,
+        .time = try getCurrentTrackTime(ra),
     };
 }
 
@@ -287,7 +287,7 @@ pub const Time = struct {
 };
 
 //(MpdError || StreamError)
-pub fn currentTrackTime(ra: mem.Allocator) !Time {
+fn getCurrentTrackTime(ra: mem.Allocator) !Time {
     var lines = try sendAndSplit("status\n", ra);
     while (lines.next()) |line| {
         if (mem.startsWith(u8, line, "time:")) {
