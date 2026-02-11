@@ -261,7 +261,7 @@ fn normalQueue(char: u8, app: *state.State, render_state: *RenderState(state.n_b
         'G' => goBottom(app.queue, &app.scroll_q, render_state),
         ' ' => {
             if (debounce()) return;
-            app.isPlaying = try mpd.togglePlaystate(app.isPlaying);
+            app.playback.playing = try mpd.togglePlaystate(app.playback.playing);
         },
         'p' => {
             if (debounce()) return;
@@ -373,7 +373,7 @@ fn normalQueue(char: u8, app: *state.State, render_state: *RenderState(state.n_b
         '\n', '\r' => {
             if (debounce()) return;
             try mpd.playByPos(wrkallocator, app.scroll_q.pos + app.queue.itopviewport);
-            if (!app.isPlaying) app.isPlaying = true;
+            if (!app.playback.playing) app.playback.playing = true;
         },
         else => return,
     }

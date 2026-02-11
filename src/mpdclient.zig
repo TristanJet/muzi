@@ -62,6 +62,7 @@ pub const MpdError = error{
     BadIndex,
     QueueEmpty,
     MissingField,
+    BadState,
 };
 
 /// Sends an MPD command and checks for OK response
@@ -198,10 +199,6 @@ pub fn playById(allocator: mem.Allocator, id: usize) !void {
     try sendCommand(command);
 }
 
-fn handleCurrentSongField(key: []const u8, value: []const u8, song: *CurrentSong) !void {
-    try song.handleField(key, value);
-}
-
 pub const CurrentSong = struct {
     pub const MAX_LEN = 64;
 
@@ -215,7 +212,7 @@ pub const CurrentSong = struct {
     trackno: ?u16,
 };
 
-pub fn getCurrentSong(ra: mem.Allocator) !CurrentSong {
+pub fn getCurrentSong(ra: mem.Allocator, time: ?Time) !CurrentSong {
     var lines = sendAndSplit("currentsong\n", ra) catch |e|
         if (e == MpdError.NoSongs)
             try sendAndSplit("playlistid 0\n", ra)
@@ -277,7 +274,7 @@ pub fn getCurrentSong(ra: mem.Allocator) !CurrentSong {
         .artist = songartist,
         .album = songalbum,
         .trackno = trackno,
-        .time = try getCurrentTrackTime(ra),
+        .time = time orelse .{ .elapsed = 0, .duration = 0 },
     };
 }
 
@@ -286,25 +283,92 @@ pub const Time = struct {
     duration: u16,
 };
 
-//(MpdError || StreamError)
-fn getCurrentTrackTime(ra: mem.Allocator) !Time {
+pub const Playback = struct {
+    playing: bool,
+    volume: u7,
+    repeat: bool,
+    random: bool,
+    single: bool,
+    consume: bool,
+};
+
+pub fn getStatus(ra: mem.Allocator) !struct { Playback, ?Time } {
     var lines = try sendAndSplit("status\n", ra);
+
+    var playing: ?bool = null;
+    var vol: ?u7 = null;
+    var repeat: ?bool = null;
+    var random: ?bool = null;
+    var single: ?bool = null;
+    var consume: ?bool = null;
+    var time: ?Time = null;
+
     while (lines.next()) |line| {
-        if (mem.startsWith(u8, line, "time:")) {
-            const time = mem.trimLeft(u8, line[5..], " ");
-            const index = mem.indexOfScalar(u8, time, ':') orelse return MpdError.Invalid;
-            const elapsed = time[0..index];
-            const duration = time[index + 1 ..];
-            return .{
-                .elapsed = fmt.parseInt(u16, elapsed, 10) catch return MpdError.Invalid,
-                .duration = fmt.parseInt(u16, duration, 10) catch return MpdError.Invalid,
+        if (mem.startsWith(u8, line, "state:")) {
+            playing = switch (line[8]) {
+                'a' => false, // state: paused
+                'l' => true, // state: playing
+                't' => false, // state: stop
+                else => return MpdError.BadState,
+            };
+        } else if (mem.startsWith(u8, line, "volume:")) {
+            const str = mem.trimEnd(u8, line[8..], " \n");
+            vol = try fmt.parseInt(u7, str, 10);
+        } else if (mem.startsWith(u8, line, "repeat:")) {
+            repeat = try parseState(line[8..9]);
+        } else if (mem.startsWith(u8, line, "random:")) {
+            random = try parseState(line[8..9]);
+        } else if (mem.startsWith(u8, line, "single:")) {
+            single = try parseState(line[8..9]);
+        } else if (mem.startsWith(u8, line, "consume:")) {
+            consume = try parseState(line[9..10]);
+        } else if (mem.startsWith(u8, line, "time:")) {
+            const str = mem.trimLeft(u8, line[5..], " ");
+            const index = mem.indexOfScalar(u8, str, ':') orelse return MpdError.BadState;
+            const elapsed = str[0..index];
+            const duration = str[index + 1 ..];
+            time = .{
+                .elapsed = fmt.parseInt(u16, elapsed, 10) catch return MpdError.BadState,
+                .duration = fmt.parseInt(u16, duration, 10) catch return MpdError.BadState,
             };
         }
     }
+
     return .{
-        .elapsed = 0,
-        .duration = 0,
+        .{
+            .playing = playing orelse return MpdError.MissingField,
+            .volume = vol orelse return MpdError.MissingField,
+            .repeat = repeat orelse return MpdError.MissingField,
+            .random = random orelse return MpdError.MissingField,
+            .single = single orelse return MpdError.MissingField,
+            .consume = consume orelse return MpdError.MissingField,
+        },
+        time,
     };
+}
+
+fn parseState(char: []const u8) MpdError!bool {
+    const parsed: u1 = fmt.parseInt(u1, char, 10) catch return MpdError.BadState;
+    return switch (parsed) {
+        0 => false,
+        1 => true,
+    };
+}
+
+test "status" {
+    const alloc = @import("allocators.zig");
+    const ra = alloc.respAllocator;
+
+    try connect(.command, .block);
+
+    const status = try getStatus(ra);
+    debug.print("playing: {}\n", .{status.playing});
+    debug.print("volume: {}\n", .{status.volume});
+    debug.print("consume: {}\n", .{status.consume});
+    debug.print("repeat: {}\n", .{status.repeat});
+    debug.print("random: {}\n", .{status.random});
+    debug.print("single: {}\n", .{status.single});
+    debug.print("time: {?}\n", .{status.time});
 }
 
 pub const Queue = struct {
@@ -970,31 +1034,6 @@ test "fill" {
     while (it.next(2)) |item| {
         debug.print("{s}\n", .{item});
     }
-}
-
-fn handleTrackTimeField(key: []const u8, value: []const u8, song: *CurrentSong) !void {
-    if (mem.eql(u8, key, "time")) {
-        try song.handleField(key, value);
-    }
-}
-
-pub fn getPlayState(respAlloc: mem.Allocator) !bool {
-    var lines = try sendAndSplit("status\n", respAlloc);
-
-    var is_playing: bool = undefined;
-    while (lines.next()) |line| {
-        if (line.len == 0) continue;
-
-        if (mem.startsWith(u8, line, "state: ")) {
-            is_playing = switch (line[8]) {
-                'a' => false, // state: paused
-                'l' => true, // state: playing
-                't' => false, // state: stop
-                else => return error.BadStateRead,
-            };
-        }
-    }
-    return is_playing;
 }
 
 fn sendAndSplit(command: []const u8, ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError || posix.WriteError)!mem.SplitIterator(u8, .scalar) {

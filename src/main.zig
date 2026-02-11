@@ -86,6 +86,9 @@ pub fn main() !void {
     try dw.init(alloc.persistentAllocator, window.panels);
     defer dw.deinit(alloc.persistentAllocator);
 
+    util.log("get status", .{});
+    const playback, const songtime = try mpd.getStatus(alloc.respAllocator);
+
     util.log("queue filling", .{});
     var initial_inc: usize = 0;
     var queue: mpd.Queue = try mpd.Queue.init(
@@ -98,7 +101,7 @@ pub fn main() !void {
     if (queue.pl_len > 0) {
         try queue.initialFill(alloc.respAllocator, alloc.persistentAllocator);
         util.log("get current song", .{});
-        song = try mpd.getCurrentSong(alloc.respAllocator);
+        song = try mpd.getCurrentSong(alloc.respAllocator, songtime);
         initial_pos = queue.jumpToPos(song.?.pos, &initial_inc);
     }
 
@@ -127,7 +130,7 @@ pub fn main() !void {
 
         .prev_id = 0,
         .song = song,
-        .isPlaying = try mpd.getPlayState(alloc.respAllocator),
+        .playback = playback,
         .last_second = 0,
         .last_elapsed = 0,
         .bar_init = true,

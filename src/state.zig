@@ -34,7 +34,7 @@ pub const State = struct {
     first_render: bool,
 
     song: ?mpd.CurrentSong,
-    isPlaying: bool,
+    playback: mpd.Playback,
     last_second: i64,
     last_elapsed: u16,
     bar_init: bool,
@@ -891,7 +891,7 @@ pub const BrowseCursorPos = struct {
 
 fn handleTime(time_: i64, app: *State, render_state: *RenderState(n_browse_columns)) !void {
     if (app.song) |*song| {
-        if (app.isPlaying) {
+        if (app.playback.playing) {
             const current_second = @divTrunc(time_, 1000);
             if (current_second > app.last_second) {
                 app.last_second = current_second;
@@ -908,8 +908,8 @@ fn handleIdle(idle_event: Idle, app: *State, render_state: *RenderState(n_browse
         .player => {
             log("player event!", .{});
             app.prev_id = if (app.song) |s| s.id else 0;
-            app.song = try mpd.getCurrentSong(alloc.respAllocator);
-            app.isPlaying = try mpd.getPlayState(alloc.respAllocator);
+            app.playback, const songtime = try mpd.getStatus(alloc.respAllocator);
+            app.song = try mpd.getCurrentSong(alloc.respAllocator, songtime);
             app.last_elapsed = app.song.?.time.elapsed;
             //lazy
             app.last_second = @divTrunc(time.milliTimestamp(), 1000);
@@ -920,12 +920,8 @@ fn handleIdle(idle_event: Idle, app: *State, render_state: *RenderState(n_browse
         },
         .queue => {
             log("queue event!", .{});
-            const prevlen = app.queue.pl_len;
-            if (prevlen == 0) {
-                app.song = try mpd.getCurrentSong(alloc.respAllocator);
-                render_state.currentTrack = true;
-                render_state.bar = true;
-            }
+            app.playback, const songtime = try mpd.getStatus(alloc.respAllocator);
+            app.song = mpd.getCurrentSong(alloc.respAllocator, songtime) catch null;
             try app.queue.reset(alloc.respAllocator);
 
             if (app.queue.pl_len > 0) {
@@ -938,13 +934,10 @@ fn handleIdle(idle_event: Idle, app: *State, render_state: *RenderState(n_browse
                     _ = app.queue.jumpToPos(app.queue.pl_len - 1, &app.scroll_q.inc);
                 }
                 try app.queue.initialFill(alloc.respAllocator, alloc.persistentAllocator);
-            } else {
-                app.song = null;
-                app.isPlaying = false;
-                render_state.currentTrack = true;
-                render_state.bar = true;
             }
 
+            render_state.currentTrack = true;
+            render_state.bar = true;
             render_state.queue = true;
             render_state.queueEffects = true;
         },
