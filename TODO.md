@@ -60,12 +60,12 @@ Let's freaking go
 - [x] patched macos
 - [x] BUG: not playing, is interpreted as nosongs error, errors unhandled
     - [x] crashes when playlist ends
-- [ ] playing modes
-    - [ ] repeat
-    - [ ] random
-    - [ ] consume
-    - [ ] single
-- [ ] volume display
+- [x] playing modes
+    - [x] repeat
+    - [x] random
+    - [x] consume
+    - [x] single
+- [x] volume display
 
 ## BUGS
 - [ ] browser handle no tags testing

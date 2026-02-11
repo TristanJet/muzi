@@ -364,7 +364,7 @@ fn writeAlbumArtist(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
     try term.writeAll(str[0..width.byte_offset]);
 }
 
-fn drawController(area: window.Area, modes: mpd.Playback) !void {
+fn drawController(modes: mpd.Playback, x: usize, y: usize) !void {
     var buf: [9]u8 = undefined;
     const keys = "[r z s c]";
     const valuestring = "[{c} {c} {c} {c}]";
@@ -374,10 +374,19 @@ fn drawController(area: window.Area, modes: mpd.Playback) !void {
         values[i] = if (@field(modes, field.name)) '#' else ' ';
     }
     const controller = try std.fmt.bufPrint(&buf, valuestring, values);
-    try term.moveCursor(area.ymin + (area.ylen / 2) - 1, area.xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH);
+    try term.moveCursor(y, x);
     try term.writeAll(keys);
-    try term.moveCursor(area.ymin + (area.ylen / 2), area.xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH);
+    try term.moveCursor(y + 1, x);
     try term.writeAll(controller);
+}
+
+fn drawVolume(vol: ?u7, x: usize, y: usize) !void {
+    var buf: [10]u8 = undefined;
+    const string: []const u8 = "vol: {d}% ";
+    const volstr = try std.fmt.bufPrint(&buf, string, .{vol orelse ' '});
+
+    try term.moveCursor(y, x);
+    try term.writeAll(volstr);
 }
 
 fn currTrackRender(
@@ -427,7 +436,8 @@ fn currTrackRender(
     try term.setBold();
     try writeTitle(title, ycent - 2, xmin, xmax);
     try term.attributeReset();
-    try drawController(area, playback);
+    try drawController(playback, xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH, ycent - 1);
+    try drawVolume(playback.volume, xmin, ycent - 1);
     if (fr.*) fr.* = false;
 }
 

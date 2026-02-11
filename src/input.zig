@@ -369,11 +369,25 @@ fn normalQueue(char: u8, app: *state.State, render_state: *RenderState(state.n_b
             if (escRead == 0) return;
 
             if (mem.eql(u8, escBuffer[0..escRead], "[A")) {
-                // log("input: arrow up\r\n", .{});
+                // up
                 try mpd.changeVol(.up, 5);
+                app.playback.volume = @min(app.playback.volume + 5, 100);
+                render_state.currentTrack = true;
             } else if (mem.eql(u8, escBuffer[0..escRead], "[B")) {
-                // log("input: arrow down\r\n", .{});
+                // down
                 try mpd.changeVol(.down, 5);
+                app.playback.volume = app.playback.volume -| 5;
+                render_state.currentTrack = true;
+            } else if (mem.eql(u8, escBuffer[0..escRead], "[1;2B")) {
+                // shift down
+                try mpd.changeVol(.down, 15);
+                app.playback.volume = app.playback.volume -| 15;
+                render_state.currentTrack = true;
+            } else if (mem.eql(u8, escBuffer[0..escRead], "[1;2A")) {
+                // shift up
+                try mpd.changeVol(.up, 15);
+                app.playback.volume = @min(app.playback.volume + 15, 100);
+                render_state.currentTrack = true;
             } else if (mem.eql(u8, escBuffer[0..escRead], "[C")) {
                 //right
                 if (debounce()) return;
