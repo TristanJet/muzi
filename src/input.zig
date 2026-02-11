@@ -261,7 +261,7 @@ fn normalQueue(char: u8, app: *state.State, render_state: *RenderState(state.n_b
         'G' => goBottom(app.queue, &app.scroll_q, render_state),
         ' ' => {
             if (debounce()) return;
-            app.playback.playing = try mpd.togglePlaystate(app.playback.playing);
+            try mpd.togglePlaystate(app.playback.playing);
         },
         'p' => {
             if (debounce()) return;

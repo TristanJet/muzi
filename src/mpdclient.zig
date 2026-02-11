@@ -150,12 +150,11 @@ pub fn checkIdle() ![2]?Event {
     return event;
 }
 
-pub fn togglePlaystate(isPlaying: bool) !bool {
+pub fn togglePlaystate(isPlaying: bool) !void {
     switch (isPlaying) {
         true => try sendCommand("pause\n"),
         false => try sendCommand("play\n"),
     }
-    return !isPlaying;
 }
 
 pub fn seek(dir: enum { forward, backward }, seconds: u8) !void {
