@@ -342,6 +342,26 @@ fn normalQueue(char: u8, app: *state.State, render_state: *RenderState(state.n_b
             app.input_state = .visual_queue;
             app.visual_anchor_pos = app.queue.itopviewport + app.scroll_q.pos;
         },
+        'r' => {
+            if (debounce()) return;
+            try mpd.toggleMode(alloc.respAllocator, .repeat, &app.playback);
+            render_state.currentTrack = true;
+        },
+        'z' => {
+            if (debounce()) return;
+            try mpd.toggleMode(alloc.respAllocator, .random, &app.playback);
+            render_state.currentTrack = true;
+        },
+        's' => {
+            if (debounce()) return;
+            try mpd.toggleMode(alloc.respAllocator, .single, &app.playback);
+            render_state.currentTrack = true;
+        },
+        'c' => {
+            if (debounce()) return;
+            try mpd.toggleMode(alloc.respAllocator, .consume, &app.playback);
+            render_state.currentTrack = true;
+        },
         '\x1B' => {
             var escBuffer: [8]u8 = undefined;
             const escRead = try term.readEscapeCode(&escBuffer);

@@ -104,7 +104,7 @@ pub fn render(
     if (render_state.borders) try drawBorders(panels.find.area);
     if (render_state.borders or render_state.queue) try drawHeader(panels.queue.area, try getQueueText(wrkallocator, @min(app.queue.itopviewport + app.queue.nviewable, app.queue.pl_len), app.queue.pl_len));
     if (render_state.borders or render_state.type or render_state.find) try drawHeader(panels.find.area, try getFindText(wrkallocator));
-    if (render_state.currentTrack) try currTrackRender(wrkallocator, panels.curr_song, app.song, &app.first_render, end_index);
+    if (render_state.currentTrack) try currTrackRender(wrkallocator, panels.curr_song, app.song, app.playback, &app.first_render, end_index);
     if (render_state.bar) try barRender(panels.curr_song, app.song, wrkallocator);
     if (render_state.queue) {
         if (app.queue.pl_len == 0) {
@@ -348,7 +348,7 @@ fn writeQueueLine(area: window.Area, row: usize, song: mpd.QSong, time: u16, wa:
 }
 
 // Higher-level rendering functions
-pub fn writeTitle(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
+fn writeTitle(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
     const panel_width = xmax - xmin;
     const width = try dw.getDisplayWidth(str, .title);
     const x_pos = xmin + (panel_width -| width.cells) / 2;
@@ -356,7 +356,7 @@ pub fn writeTitle(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
     try term.writeAll(str[0..width.byte_offset]);
 }
 
-pub fn writeAlbumArtist(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
+fn writeAlbumArtist(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
     const panel_width = xmax - xmin;
     const width = try dw.getDisplayWidth(str, .album_artist);
     const x_pos = xmin + @max(((panel_width -| width.cells) / 2), window.CURRENT_SONG_CLOCK_WIDTH);
@@ -364,10 +364,27 @@ pub fn writeAlbumArtist(str: []const u8, y: usize, xmin: usize, xmax: usize) !vo
     try term.writeAll(str[0..width.byte_offset]);
 }
 
+fn drawController(area: window.Area, modes: mpd.Playback) !void {
+    var buf: [9]u8 = undefined;
+    const keys = "[r z s c]";
+    const valuestring = "[{c} {c} {c} {c}]";
+    var values: struct { u8, u8, u8, u8 } = undefined;
+    inline for (0..4) |i| {
+        const field = @typeInfo(mpd.Playback).@"struct".fields[i];
+        values[i] = if (@field(modes, field.name)) '#' else ' ';
+    }
+    const controller = try std.fmt.bufPrint(&buf, valuestring, values);
+    try term.moveCursor(area.ymin + (area.ylen / 2) - 1, area.xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH);
+    try term.writeAll(keys);
+    try term.moveCursor(area.ymin + (area.ylen / 2), area.xmax - window.CURRENT_SONG_PLAYSTATE_WIDTH);
+    try term.writeAll(controller);
+}
+
 fn currTrackRender(
     allocator: std.mem.Allocator,
     p: window.Panel,
     song: ?mpd.CurrentSong,
+    playback: mpd.Playback,
     fr: *bool,
     end_index: *usize,
 ) !void {
@@ -410,6 +427,7 @@ fn currTrackRender(
     try term.setBold();
     try writeTitle(title, ycent - 2, xmin, xmax);
     try term.attributeReset();
+    try drawController(area, playback);
     if (fr.*) fr.* = false;
 }
 

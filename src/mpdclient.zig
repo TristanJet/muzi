@@ -378,12 +378,13 @@ test "status" {
     debug.print("time: {?}\n", .{time});
 }
 
-pub fn toggleMode(gpa: mem.Allocator, playmode: PlayMode, playback: Playback) !void {
+pub fn toggleMode(gpa: mem.Allocator, playmode: PlayMode, playback: *Playback) !void {
     const name: []const u8 = @tagName(playmode);
     var currentmode: bool = undefined;
     inline for (0..4) |i| {
         if (@intFromEnum(playmode) == i) {
             currentmode = @field(playback, @typeInfo(Playback).@"struct".fields[i].name);
+            @field(playback, @typeInfo(Playback).@"struct".fields[i].name) = !currentmode;
         }
     }
     const cmd = try fmt.allocPrint(gpa, "{s} {}\n", .{ name, @intFromBool(!currentmode) });
