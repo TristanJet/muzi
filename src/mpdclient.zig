@@ -283,13 +283,22 @@ pub const Time = struct {
     duration: u16,
 };
 
+// DO NOT CHANGE THE ORDER
 pub const Playback = struct {
-    playing: bool,
-    volume: u7,
     repeat: bool,
     random: bool,
     single: bool,
     consume: bool,
+    playing: bool,
+    volume: u7,
+};
+
+// DO NOT CHANGE THE ORDER
+const PlayMode = enum {
+    repeat,
+    random,
+    single,
+    consume,
 };
 
 pub fn getStatus(ra: mem.Allocator) !struct { Playback, ?Time } {
@@ -361,14 +370,36 @@ test "status" {
 
     try connect(.command, .block);
 
-    const status = try getStatus(ra);
-    debug.print("playing: {}\n", .{status.playing});
-    debug.print("volume: {}\n", .{status.volume});
-    debug.print("consume: {}\n", .{status.consume});
-    debug.print("repeat: {}\n", .{status.repeat});
-    debug.print("random: {}\n", .{status.random});
-    debug.print("single: {}\n", .{status.single});
-    debug.print("time: {?}\n", .{status.time});
+    const playback, const time = try getStatus(ra);
+    debug.print("playing: {}\n", .{playback.playing});
+    debug.print("volume: {}\n", .{playback.volume});
+    debug.print("consume: {}\n", .{playback.consume});
+    debug.print("repeat: {}\n", .{playback.repeat});
+    debug.print("random: {}\n", .{playback.random});
+    debug.print("single: {}\n", .{playback.single});
+    debug.print("time: {?}\n", .{time});
+}
+
+pub fn toggleMode(gpa: mem.Allocator, playmode: PlayMode, playback: Playback) !void {
+    const name: []const u8 = @tagName(playmode);
+    var currentmode: bool = undefined;
+    inline for (0..4) |i| {
+        if (@intFromEnum(playmode) == i) {
+            currentmode = @field(playback, @typeInfo(Playback).@"struct".fields[i].name);
+        }
+    }
+    const cmd = try fmt.allocPrint(gpa, "{s} {}\n", .{ name, @intFromBool(!currentmode) });
+    try sendCommand(cmd);
+}
+
+test "togglemode" {
+    const alloc = @import("allocators.zig");
+    const ra = alloc.respAllocator;
+
+    try connect(.command, .block);
+
+    const playback, _ = try getStatus(ra);
+    try toggleMode(ra, .single, playback);
 }
 
 pub const Queue = struct {
