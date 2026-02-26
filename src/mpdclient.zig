@@ -322,13 +322,13 @@ pub fn getStatus(ra: mem.Allocator) !struct { Playback, ?Time } {
             const str = mem.trimEnd(u8, line[8..], " \n");
             vol = try fmt.parseInt(u7, str, 10);
         } else if (mem.startsWith(u8, line, "repeat:")) {
-            repeat = try parseState(line[8..9]);
+            repeat = try parseMode(line[8..9]);
         } else if (mem.startsWith(u8, line, "random:")) {
-            random = try parseState(line[8..9]);
+            random = try parseMode(line[8..9]);
         } else if (mem.startsWith(u8, line, "single:")) {
-            single = try parseState(line[8..9]);
+            single = try parseMode(line[8..9]);
         } else if (mem.startsWith(u8, line, "consume:")) {
-            consume = try parseState(line[9..10]);
+            consume = try parseMode(line[9..10]);
         } else if (mem.startsWith(u8, line, "time:")) {
             const str = mem.trimLeft(u8, line[5..], " ");
             const index = mem.indexOfScalar(u8, str, ':') orelse return MpdError.BadState;
@@ -354,7 +354,11 @@ pub fn getStatus(ra: mem.Allocator) !struct { Playback, ?Time } {
     };
 }
 
-fn parseState(char: []const u8) MpdError!bool {
+fn parseMode(char: []const u8) MpdError!bool {
+    if (char[0] == 'o') {
+        @branchHint(.unlikely);
+        return true;
+    }
     const parsed: u1 = fmt.parseInt(u1, char, 10) catch return MpdError.BadState;
     return switch (parsed) {
         0 => false,
@@ -397,8 +401,8 @@ test "togglemode" {
 
     try connect(.command, .block);
 
-    const playback, _ = try getStatus(ra);
-    try toggleMode(ra, .single, playback);
+    var playback, _ = try getStatus(ra);
+    try toggleMode(ra, .single, &playback);
 }
 
 pub const Queue = struct {
