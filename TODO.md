@@ -1,78 +1,17 @@
 # muzi
 
-## TO 1.0 !!!!!!!!!!
-Let's freaking go
+## next update
+### BUGS
+- [x] handle "oneshot" state for playmode
+- [x] handle wouldblock writing correctly
+    - [ ] testing on mac
 
-- [x] remove queue render flashing
-- [x] g, G 
-    - [x] variable buffer handling
-    - [x] parse int to current pos is u8 !
-- [x] ctrl d and u work again
-- [x] jump to currently playing
-    - [x] make queue adding, deleting work again
-        - [x] investigate cause
-        - [x] Queue breaks after adding song in the middle
-- [x] initial queue position should be currently playing
-- [x] n/plen indicator on queue
-- [x] crash when I search lotus juice
-- [x] BUG: time bar doesn't update on space add if paused
-- [x] BACKSPACE for search algo - save the strings?
-    - [x] buggy af
-- [x] n after search to find next best match
-- [x] browser column 1 resets when progress node
-- [x] BUG: Going to initial column resets final
-- [x] delete and put and yank in queue
-- [x] fix jump
-- [x] moving around in queue, visual mode?
-    - [x] when delete from q, store the song ids
-- [x] fix jumping bugs
-    - [x] visual mode delete end
-    - [x] paste end
-    - [x] bug on G, inc is wrong
-    - [x] paste in middle
-    - [x] jump if less
-    - [x] Clear completely bug
-- [x] rewrite half movement to be modular
-- [x] manual go to current playing
-- [x] send command should fail silently if error unknown
-- [x] Queue buffer adapts to window size
-- [x] clear cursor
-- [x] fix jumping
-- [x] ROBUST check for terminal features - support ASCII only
-- [x] return to original state, whatever was printed before running goes back to being visible
-- [x] volume control
-- [x] robust mac support
-- [x] fallback if TTY mode
-    - [x] empty block char check
-- [x] text too long - window size
-- [x] migrate to 0.15
-- [x] fix I/O
-- [x] CurrentSong should have optional values, initialization is unsafe
-- [x] queue handle no tags
-- [x] weird bug where queue no tags handled differently if zoom out
-- [x] browser files
-- [x] WriteFailed error on release fast only
-- [x] segfault with data arenas
-
-## TO 1.1
-- [x] FIXED: investigate segfault on find
-- [x] INTEGER OVERFLOW: G, fuck up queue
-- [x] patched macos
-- [x] BUG: not playing, is interpreted as nosongs error, errors unhandled
-    - [x] crashes when playlist ends
-- [x] playing modes
-    - [x] repeat
-    - [x] random
-    - [x] consume
-    - [x] single
-- [x] volume display
-
-## BUGS
 - [ ] browser handle no tags testing
 - [ ] ESC bug
 
-## next update
+- [ ] replace split with tokenize
 - [ ] clean up main.zig
+- [ ] loose search by file if no tags
 - [ ] Stop using nonblocking fd. look into epoll and kitty input protocol
 - [ ] make managed struct for lists?
 - [ ] handle the non blocking I/O properly ; worst case it blocks the whole terminal!

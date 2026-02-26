@@ -22,6 +22,11 @@ const BUFFER_SIZE = 4096;
 var buffer: [BUFFER_SIZE]u8 = undefined;
 var buffer_pos: usize = 0;
 
+const bufPrint = std.fmt.bufPrint;
+const FBUF_SIZE = 64; // has to fit 2 usizes (length of 20)
+var fbuf: [FBUF_SIZE]u8 = undefined;
+const BufPrintError = std.fmt.BufPrintError;
+
 var caps: Capabilities = undefined;
 
 //global var this is pretty bad lol, who cares
@@ -158,62 +163,52 @@ fn getTty() !void {
 
 const retry_sleep_time = 32000;
 pub fn flush() WriteError!void {
-    out.flush() catch switch (writer.err.?) {
-        WriteError.WouldBlock => {
-            for (0..3) |_| {
+    const drainFn = out.vtable.drain;
+    var failed: u2 = 0;
+    while (out.end != 0) {
+        _ = drainFn(out, &.{""}, 1) catch switch (writer.err.?) {
+            WriteError.WouldBlock => {
+                util.log("would block", .{});
+                if (failed < 3) failed += 1 else return writer.err.?;
                 std.Thread.sleep(retry_sleep_time);
-                out.flush() catch continue;
-                return;
-            }
-            return writer.err.?;
-        },
-        else => return writer.err.?,
-    };
+                continue;
+            },
+            else => return writer.err.?,
+        };
+    }
 }
 
-pub fn writeAll(str: []const u8) WriteError!void {
-    out.writeAll(str) catch switch (writer.err.?) {
-        WriteError.WouldBlock => {
-            for (0..3) |_| {
+pub fn writeAll(bytes: []const u8) WriteError!void {
+    var index: usize = 0;
+    var failed: u2 = 0;
+    while (index < bytes.len) {
+        index += out.write(bytes[index..]) catch switch (writer.err.?) {
+            WriteError.WouldBlock => {
+                util.log("would block", .{});
+                if (failed < 3) failed += 1 else return writer.err.?;
                 std.Thread.sleep(retry_sleep_time);
-                out.writeAll(str) catch continue;
-                return;
-            }
-            return writer.err.?;
-        },
-        else => return writer.err.?,
-    };
+                continue;
+            },
+            else => return writer.err.?,
+        };
+    }
 }
 
-fn print(comptime fmt: []const u8, args: anytype) WriteError!void {
-    out.print(fmt, args) catch switch (writer.err.?) {
-        WriteError.WouldBlock => {
-            for (0..3) |_| {
+pub fn writeByteNTimes(byte: u8, n: usize) WriteError!void {
+    var index: usize = 0;
+    var failed: u2 = 0;
+    while (index < n) {
+        index += out.splatByte(byte, n) catch switch (writer.err.?) {
+            WriteError.WouldBlock => {
+                util.log("would block", .{});
+                if (failed < 3) failed += 1 else return writer.err.?;
                 std.Thread.sleep(retry_sleep_time);
-                out.print(fmt, args) catch continue;
-                return;
-            }
-            return writer.err.?;
-        },
-        else => return writer.err.?,
-    };
+                continue;
+            },
+            else => return writer.err.?,
+        };
+    }
 }
-
-pub fn writeByteNTimes(byte: u8, n: usize) !void {
-    for (0..n) |_| out.writeByte(byte) catch switch (writer.err.?) {
-        WriteError.WouldBlock => {
-            for (0..3) |_| {
-                std.Thread.sleep(retry_sleep_time);
-                out.writeByte(byte) catch continue;
-                return;
-            }
-            return writer.err.?;
-        },
-        else => return writer.err.?,
-    };
-}
-
-//
 
 pub fn fileDescriptor() fs.File.Handle {
     return tty.handle;
@@ -343,7 +338,7 @@ pub fn setColor(color: Color) WriteError!void {
         try ansiColor(color);
 }
 
-fn ansiColor(color: Color) WriteError!void {
+fn ansiColor(color: Color) (BufPrintError || WriteError)!void {
     const color_code: u16 = switch (color) {
         // .blue => 34,
         // .red => 31,
@@ -354,11 +349,10 @@ fn ansiColor(color: Color) WriteError!void {
         .magenta => 35,
     };
 
-    return try print("\x1B[{}m", .{color_code});
+    return try writeAll(try bufPrint(&fbuf, "\x1B[{}m", .{color_code}));
 }
 
-fn trueColor(color: Color) WriteError!void {
-    // Predefined RGB values for each named color
+fn trueColor(color: Color) (WriteError || BufPrintError)!void {
     const RGB = struct { r: u8, g: u8, b: u8 };
     const rgb: RGB = switch (color) {
         // .blue => .{ .r = 0, .g = 0, .b = 255 }, // True color blue
@@ -370,13 +364,13 @@ fn trueColor(color: Color) WriteError!void {
         .magenta => .{ .r = 240, .g = 60, .b = 170 },
     };
 
-    // Format the true color ANSI sequence
-    return print("\x1B[38;2;{};{};{}m", .{ rgb.r, rgb.g, rgb.b });
+    const fmt = "\x1B[38;2;{};{};{}m";
+    return try writeAll(try bufPrint(&fbuf, fmt, .{ rgb.r, rgb.g, rgb.b }));
 }
 
 // Cursor and position control
-pub fn moveCursor(row: usize, col: usize) WriteError!void {
-    try print("\x1B[{};{}H", .{ row + 1, col + 1 });
+pub fn moveCursor(row: usize, col: usize) (WriteError || BufPrintError)!void {
+    try writeAll(try bufPrint(&fbuf, "\x1B[{};{}H", .{ row + 1, col + 1 }));
 }
 
 pub fn clearScreen() WriteError!void {
