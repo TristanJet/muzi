@@ -2,6 +2,7 @@
 
 ## next update
 ### BUGS
+- [x] queue bugging on large sizes :(
 - [x] handle "oneshot" state for playmode
 - [x] handle wouldblock writing correctly
     - [ ] testing on mac

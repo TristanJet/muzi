@@ -99,10 +99,10 @@ pub fn main() !void {
     var song: ?mpd.CurrentSong = null;
     var initial_pos: u8 = 0;
     if (queue.pl_len > 0) {
-        try queue.initialFill(alloc.respAllocator, alloc.persistentAllocator);
         util.log("get current song", .{});
         song = try mpd.getCurrentSong(alloc.respAllocator, songtime);
         initial_pos = queue.jumpToPos(song.?.pos, &initial_inc);
+        try queue.initialFill(alloc.respAllocator, alloc.persistentAllocator);
     }
 
     var mpd_data = state.Data{
