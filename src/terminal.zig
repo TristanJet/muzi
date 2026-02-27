@@ -161,7 +161,7 @@ fn getTty() !void {
 // also it's really wrong, this is barely a patch
 // maybe zig new IO interface reveals the answer
 
-const retry_sleep_time = 32000;
+const retry_sleep_ns = 32000;
 pub fn flush() WriteError!void {
     const drainFn = out.vtable.drain;
     var failed: u2 = 0;
@@ -170,7 +170,7 @@ pub fn flush() WriteError!void {
             WriteError.WouldBlock => {
                 util.log("would block", .{});
                 if (failed < 3) failed += 1 else return writer.err.?;
-                std.Thread.sleep(retry_sleep_time);
+                std.Thread.sleep(retry_sleep_ns);
                 continue;
             },
             else => return writer.err.?,
@@ -186,7 +186,7 @@ pub fn writeAll(bytes: []const u8) WriteError!void {
             WriteError.WouldBlock => {
                 util.log("would block", .{});
                 if (failed < 3) failed += 1 else return writer.err.?;
-                std.Thread.sleep(retry_sleep_time);
+                std.Thread.sleep(retry_sleep_ns);
                 continue;
             },
             else => return writer.err.?,
@@ -202,7 +202,7 @@ pub fn writeByteNTimes(byte: u8, n: usize) WriteError!void {
             WriteError.WouldBlock => {
                 util.log("would block", .{});
                 if (failed < 3) failed += 1 else return writer.err.?;
-                std.Thread.sleep(retry_sleep_time);
+                std.Thread.sleep(retry_sleep_ns);
                 continue;
             },
             else => return writer.err.?,

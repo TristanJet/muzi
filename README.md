@@ -18,10 +18,10 @@ muzi is available on the [AUR](https://aur.archlinux.org/packages/muzi)
 yay -S muzi
 ```
 
-To build muzi from source you need **Zig 0.15** installed, running the following command in the source directory will build to $source/zig-out/bin/muzi
+To build muzi from source you need [Zig 0.15.2](https://ziglang.org/download/) and the zig standard library installed, running the following command in the source directory will build to ${SRC-DIR}/zig-out/bin/
 
 ```bash
-zig build -Doptimize=ReleaseFast
+zig build -Drelease=true
 ```
 
 A running [mpd](https://github.com/MusicPlayerDaemon/MPD) instance will be required. The default host and port are 127.0.0.1:6600. The port and host can be specified as so:
@@ -39,15 +39,30 @@ All *delete* commands save the selected songs to a yank buffer
 | key   | action    |
 |---    |---        |
 | q     | quit      |
+| f     | switch to fuzzy find                       |
+| b     | switch to browser      |
 | k     | cursor up        |
 | j     | cursor down      |
 | Ctrl+U     | cursor up half queue      |
 | Ctrl+D     | cursor down half queue      |
 | g     | go top      |
 | G     | go bottom      |
+| ENTER     | play selected song      |
+| SPACE | play/pause        |
 | h     | prev song      |
 | l     | next song      |
-| ENTER     | play selected song      |
+| r     | toggle *repeat* state      |
+| z     | toggle *random* state      |
+| s     | toggle *single* state      |
+| c     | toggle *consume* state      |
+| left     | seek -5      |
+| right     | seek +5      |
+| SHIFT+left     | seek -15      |
+| SHIFT+right     | seek +15      |
+| up     | increase volume +5      |
+| down     | decrease volume -5            |
+| SHIFT+up     | increase volume +15      |
+| SHIFT+down     | decrease volume -15            |
 | x, d     | delete from queue at cursor position              |
 | X     | clear queue      |
 | D     | clear till      |
@@ -55,18 +70,10 @@ All *delete* commands save the selected songs to a yank buffer
 | Y     | yank till end         |
 | p     | put (in yank buffer)      |
 | v     | enter visual mode         |
-| SPACE | play/pause        |
-| left     | seek -5      |
-| right     | seek +5      |
-| SHIFT+left     | seek -15      |
-| SHIFT+right     | seek +15      |
-| up     | increase volume      |
-| up     | decrease volume            |
-| f     | switch to fuzzy find                       |
-| b     | switch to browser      |
 
 **visual queue**
-All *delete* commands save the selected songs to a yank buffer
+
+*delete* and *yank* commands save the selected songs to a yank buffer and exit to *normal queue* input mode
 
 | key   | action    |
 |---    |---|
@@ -84,7 +91,7 @@ All *delete* commands save the selected songs to a yank buffer
 | key   | action    |
 |---    |---        |
 | ESC     | return to normal queue          |
-| Backspace | delete                                                 |
+| Backspace | delete typed                                                  |
 | Ctrl+U     | cursor up      |     
 | Ctrl+D     | cursor down      |
 | ENTER     | add song to queue      |
@@ -102,8 +109,10 @@ All *delete* commands save the selected songs to a yank buffer
 | G     | go bottom                     |
 | h     | prev column      |
 | l     | next column      |
-| n     | cycle 10 best query matches      |
+| n     | cycle *forward* 10 best query matches      |
+| N     | cycle *backward* 10 best query matches      |
 | ENTER     | add to queue      |
 | SPACE     | clear queue + add to queue |
 | /     | search in column      |
 | ENTER, ESC *while searching    | exit search |
+| Backspace *while searching    | delete typed |
