@@ -55,8 +55,7 @@ const Dim = union(DimType) {
     },
 };
 
-pub fn init() WindowError!void {
-    const tty = terminal.fileDescriptor();
+pub fn init(tty: fs.File.Handle) WindowError!void {
     try getWindow(tty);
     panels.init(window);
     y_len_ptr.* = panels.find.validArea().ylen;

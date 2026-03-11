@@ -48,18 +48,6 @@ pub fn main() !void {
     if (args.help) return;
     if (args.version) return;
 
-    try term.init();
-    defer term.deinit() catch {};
-    util.log("after term", .{});
-
-    window.init() catch |e| switch (e) {
-        window.WindowError.TooSmall => {
-            try proc.printWinSmall(wrkallocator);
-            return;
-        },
-        else => return error.Ioctl,
-    };
-
     mpd.handleArgs(args.host, args.port);
     util.log("before connect", .{});
     mpd.connect(.command, .block) catch |e| switch (e) {
@@ -81,7 +69,17 @@ pub fn main() !void {
     };
     defer mpd.disconnect(.idle);
     try mpd.initIdle();
+
     util.log("after connect", .{});
+    term.init() catch |e| switch (e) {
+        window.WindowError.TooSmall => {
+            try proc.printWinSmall(wrkallocator);
+            return;
+        },
+        else => return e,
+    };
+    defer term.deinit() catch {};
+    util.log("after term", .{});
 
     try dw.init(alloc.persistentAllocator, window.panels);
     defer dw.deinit(alloc.persistentAllocator);

@@ -1,11 +1,14 @@
 # muzi
 
-## next update
+### REPLACE NON-BLOCKING SOCKET ON TTY
+- Poll
+
+### CLEAN INIT
+- ALl the error checks have to happen before the terminal is cleared, anything printed to /dev/tty after the deferred cleanup won't be seen.
+
+
+
 ### BUGS
-- [x] queue bugging on large sizes :(
-- [x] handle "oneshot" state for playmode
-- [x] handle wouldblock writing correctly
-    - [ ] testing on mac
 
 - [ ] browser handle no tags testing
 - [ ] ESC bug

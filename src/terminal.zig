@@ -1,6 +1,7 @@
 const std = @import("std");
 const util = @import("util.zig");
 const builtin = @import("builtin");
+const win = @import("window.zig");
 const native_os = builtin.os.tag;
 
 const mem = std.mem;
@@ -46,12 +47,13 @@ pub const OSError = error{
 };
 
 pub fn init() !void {
+    errdefer tty.close();
+    try getTty();
+    try win.init(tty.handle);
     caps = try detectTerminal();
     symbols = Symbols.init(caps.is_tty);
-    try getTty();
-    errdefer tty.close();
-    try uncook();
     errdefer cook() catch {};
+    try uncook();
     try setNonBlock();
     try setColor(.white);
     buffer_pos = 0;
@@ -208,10 +210,6 @@ pub fn writeByteNTimes(byte: u8, n: usize) WriteError!void {
             else => return writer.err.?,
         };
     }
-}
-
-pub fn fileDescriptor() fs.File.Handle {
-    return tty.handle;
 }
 
 pub fn readBytes(read_buffer: []u8) ReadError!usize {

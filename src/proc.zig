@@ -118,22 +118,10 @@ test "validIp" {
 pub fn printMpdFail(allocator: mem.Allocator, host: ?[4]u8, port: ?u16) !void {
     const tty = try getTty();
     defer tty.close();
-    const msg: []const u8 = if (host) |arr|
-        try fmt.allocPrint(allocator, no_mpd_msg, .{
-            arr[0],
-            arr[1],
-            arr[2],
-            arr[3],
-            port orelse 6600,
-        })
-    else
-        try fmt.allocPrint(allocator, no_mpd_msg, .{
-            127,
-            0,
-            0,
-            1,
-            port orelse 6600,
-        });
+    const h: [4]u8 = host orelse .{ 127, 0, 0, 1 };
+    const p: u16 = port orelse 6600;
+    const msg = try fmt.allocPrint(allocator, no_mpd_msg, .{ h[0], h[1], h[2], h[3], p });
+    log("msg: {s}", .{msg});
     try tty.writeAll(msg);
 }
 
