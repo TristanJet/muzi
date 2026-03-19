@@ -220,7 +220,7 @@ fn lookupWidth(max: usize, str: []const u8) Width {
 }
 
 test "display width" {
-    try util.loggerInit();
+    try util.loggerInit(null, null);
     try init(pers_alloc);
     // defer util.deinit() catch {};
 

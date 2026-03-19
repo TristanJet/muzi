@@ -30,9 +30,6 @@ const wrkbuf = &alloc.wrkbuf;
 pub fn main() !void {
     defer alloc.deinit();
 
-    try util.loggerInit();
-    defer util.deinit();
-
     const args = proc.handleArgs() catch |e| switch (e) {
         error.InvalidOption => {
             try proc.printInvArg();
@@ -45,13 +42,16 @@ pub fn main() !void {
         else => return,
     };
 
-    if (args.help) return;
-    if (args.version) return;
+    if (args.help or args.version) return;
+
+    try util.loggerInit(args.etty, args.ltty);
+    defer util.deinit();
 
     mpd.handleArgs(args.host, args.port);
     util.log("before connect", .{});
     mpd.connect(.command, .block) catch |e| switch (e) {
         mpd.StreamError.ServerNotFound => {
+            util.log("server not found", .{});
             try proc.printMpdFail(wrkallocator, args.host, args.port);
             return;
         },

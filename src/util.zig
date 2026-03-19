@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const fmt = std.fmt;
 const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
@@ -12,9 +13,15 @@ const lowerBuf2: []u8 = alloc.ptrLower2;
 const SearchSample = @import("algo.zig").SearchSample;
 const ascii = std.ascii;
 
+pub const T_NTTY: type = switch (builtin.os.tag) {
+    .linux => u12,
+    .macos => u9,
+    else => @compileError("OS not supported"),
+};
+
 const logttypath = switch (builtin.os.tag) {
-    .linux => "/dev/pts/1",
-    .macos => "/dev/ttys001",
+    .linux => "/dev/pts/{}",
+    .macos => "/dev/ttys{d:0<3}",
     else => @compileError("Unsupported OS"),
 };
 
@@ -25,39 +32,51 @@ const DebugLog = if (builtin.mode == .Debug) struct {
 
 var debug_log: DebugLog = if (builtin.mode == .Debug) .{ .buffer = undefined, .n = 0 } else {};
 
-pub fn loggerInit() !void {
-    if (builtin.mode == .Debug) {
-        logtty = try fs.cwd().openFile(
-            logttypath,
-            .{
-                .mode = fs.File.OpenMode.write_only,
-                .allow_ctty = false,
-                .lock = .none,
-                .lock_nonblocking = false,
-            },
-        );
-        _ = try posix.write(logtty.handle, "\x1B[2J");
+var log_flag: bool = false;
 
-        initErr() catch return error.StdErrInitFailed;
+pub fn loggerInit(etty: ?T_NTTY, ltty: ?T_NTTY) !void {
+    var buf: [16]u8 = undefined;
+    if (builtin.mode == .Debug) {
+        if (ltty) |n| {
+            log_flag = true;
+            logtty = try fs.cwd().openFile(
+                try fmt.bufPrint(&buf, logttypath, .{n}),
+                .{
+                    .mode = fs.File.OpenMode.write_only,
+                    .allow_ctty = false,
+                    .lock = .none,
+                    .lock_nonblocking = false,
+                },
+            );
+            _ = try posix.write(logtty.handle, "\x1B[2J");
+        }
+
+        initErr(etty) catch return error.StdErrInitFailed;
     }
 }
 
 pub fn deinit() void {
-    if (builtin.mode == .Debug) logtty.close();
+    if (builtin.mode == .Debug and log_flag) logtty.close();
 }
 
-fn initErr() !void {
+fn initErr(etty: ?T_NTTY) !void {
+    var buf: [16]u8 = undefined;
     const stderr_fd = fs.File.stderr().handle;
+    const path = if (etty) |n| try fmt.bufPrint(&buf, logttypath, .{n}) else "/dev/tty";
+    const errtty = try fs.cwd().openFile(path, .{ .mode = .write_only });
+    defer errtty.close();
     // Redirect stderr to the target terminal's file descriptor
-    try posix.dup2(logtty.handle, stderr_fd);
+    try posix.dup2(errtty.handle, stderr_fd);
 }
 
 pub fn log(comptime format: []const u8, args: anytype) void {
     if (builtin.mode == .Debug) {
-        defer debug_log.n += 1;
-        const msg = std.fmt.bufPrint(&debug_log.buffer, format ++ "\n", args) catch "ERROR FORMATTING";
-        const no = std.fmt.bufPrint(debug_log.buffer[msg.len..], "{} -> ", .{debug_log.n}) catch unreachable;
-        _ = posix.writev(logtty.handle, &.{ .{ .base = no.ptr, .len = no.len }, .{ .base = msg.ptr, .len = msg.len } }) catch return;
+        if (log_flag) {
+            const msg = fmt.bufPrint(&debug_log.buffer, format ++ "\n", args) catch "ERROR FORMATTING";
+            const no = fmt.bufPrint(debug_log.buffer[msg.len..], "{} -> ", .{debug_log.n}) catch unreachable;
+            _ = posix.writev(logtty.handle, &.{ .{ .base = no.ptr, .len = no.len }, .{ .base = msg.ptr, .len = msg.len } }) catch return;
+            debug_log.n += 1;
+        }
     }
 }
 
@@ -104,8 +123,7 @@ fn compareStrings(context: S, mid_item: []const u8, index: usize) math.Order {
     } else {
         lowerItem = ascii.lowerString(context.lowerBuf, mid_item);
     }
-    const order = std.mem.order(u8, context.key, lowerItem);
-    return order;
+    return std.mem.order(u8, context.key, lowerItem);
 }
 
 fn binarySearch(

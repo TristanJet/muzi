@@ -6,14 +6,14 @@
 ### CLEAN INIT
 - ALl the error checks have to happen before the terminal is cleared, anything printed to /dev/tty after the deferred cleanup won't be seen.
 
-
-
 ### BUGS
-
+- [x] specify log and panic tty
+- [ ] next and prev should change playmode if paused or stopped
+- [ ] replace split with tokenize
 - [ ] browser handle no tags testing
+
 - [ ] ESC bug
 
-- [ ] replace split with tokenize
 - [ ] clean up main.zig
 - [ ] loose search by file if no tags
 - [ ] Stop using nonblocking fd. look into epoll and kitty input protocol
