@@ -383,7 +383,7 @@ fn drawController(playback: mpd.Playback, x: usize, y: usize) !void {
 fn drawVolume(vol: ?u7, x: usize, y: usize) !void {
     var buf: [10]u8 = undefined;
     const string: []const u8 = "vol: {}% ";
-    const volstr = try std.fmt.bufPrint(&buf, string, .{vol orelse ' '});
+    const volstr = try std.fmt.bufPrint(&buf, string, .{vol orelse '-'});
 
     try term.moveCursor(y, x);
     try term.writeAll(volstr);
