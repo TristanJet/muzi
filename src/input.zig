@@ -344,22 +344,26 @@ fn normalQueue(char: u8, app: *state.State, render_state: *RenderState(state.n_b
         },
         'r' => {
             if (debounce()) return;
-            try mpd.toggleMode(alloc.respAllocator, .repeat, &app.playback);
+            app.playback.toggle(.repeat);
+            try mpd.toggleMode(alloc.respAllocator, .repeat, app.playback.repeat);
             render_state.currentTrack = true;
         },
         'z' => {
             if (debounce()) return;
-            try mpd.toggleMode(alloc.respAllocator, .random, &app.playback);
+            app.playback.toggle(.random);
+            try mpd.toggleMode(alloc.respAllocator, .random, app.playback.random);
             render_state.currentTrack = true;
         },
         's' => {
             if (debounce()) return;
-            try mpd.toggleMode(alloc.respAllocator, .single, &app.playback);
+            app.playback.toggle(.single);
+            try mpd.toggleMode(alloc.respAllocator, .single, app.playback.single);
             render_state.currentTrack = true;
         },
         'c' => {
             if (debounce()) return;
-            try mpd.toggleMode(alloc.respAllocator, .consume, &app.playback);
+            app.playback.toggle(.consume);
+            try mpd.toggleMode(alloc.respAllocator, .consume, app.playback.consume);
             render_state.currentTrack = true;
         },
         '\x1B' => {
@@ -369,24 +373,32 @@ fn normalQueue(char: u8, app: *state.State, render_state: *RenderState(state.n_b
             if (escRead == 0) return;
 
             if (mem.eql(u8, escBuffer[0..escRead], "[A")) {
-                // up
-                try mpd.changeVol(.up, 5);
-                app.playback.volume = @min(app.playback.volume + 5, 100);
+                //up
+                const volume: u7 = app.playback.volume orelse return;
+                const delta: i8 = 5;
+                app.playback.volume = changeVol(volume, delta);
+                try mpd.changeVol(delta);
                 render_state.currentTrack = true;
             } else if (mem.eql(u8, escBuffer[0..escRead], "[B")) {
                 // down
-                try mpd.changeVol(.down, 5);
-                app.playback.volume = app.playback.volume -| 5;
+                const volume: u7 = app.playback.volume orelse return;
+                const delta: i8 = -5;
+                app.playback.volume = changeVol(volume, delta);
+                try mpd.changeVol(delta);
                 render_state.currentTrack = true;
             } else if (mem.eql(u8, escBuffer[0..escRead], "[1;2B")) {
                 // shift down
-                try mpd.changeVol(.down, 15);
-                app.playback.volume = app.playback.volume -| 15;
+                const volume: u7 = app.playback.volume orelse return;
+                const delta: i8 = -15;
+                app.playback.volume = changeVol(volume, delta);
+                try mpd.changeVol(delta);
                 render_state.currentTrack = true;
             } else if (mem.eql(u8, escBuffer[0..escRead], "[1;2A")) {
                 // shift up
-                try mpd.changeVol(.up, 15);
-                app.playback.volume = @min(app.playback.volume + 15, 100);
+                const volume: u7 = app.playback.volume orelse return;
+                const delta: i8 = 15;
+                app.playback.volume = changeVol(volume, delta);
+                try mpd.changeVol(delta);
                 render_state.currentTrack = true;
             } else if (mem.eql(u8, escBuffer[0..escRead], "[C")) {
                 //right
@@ -411,6 +423,54 @@ fn normalQueue(char: u8, app: *state.State, render_state: *RenderState(state.n_b
         },
         else => return,
     }
+}
+
+fn changeVol(vol: u7, delta: i8) u7 {
+    return @as(u7, @max(@min((@as(i8, vol) +| delta), 100), 0));
+}
+
+test "changevol" {
+    const ra = @import("allocators.zig").respAllocator;
+
+    try mpd.connect(.command, .block);
+
+    var playback, _ = try mpd.getStatus(ra);
+
+    var prev_vol = playback.volume.?;
+    var delta: i8 = 15;
+    playback.volume = changeVol(prev_vol, delta);
+    try std.testing.expect(playback.volume.? == prev_vol + 5 or playback.volume.? == 100);
+
+    try mpd.changeVol(delta);
+    playback, _ = try mpd.getStatus(ra);
+    try std.testing.expect(playback.volume.? == prev_vol + 5 or playback.volume.? == 100);
+
+    prev_vol = playback.volume.?;
+    delta = 100;
+    playback.volume = changeVol(prev_vol, delta);
+    try std.testing.expect(playback.volume.? == 100);
+
+    try mpd.changeVol(delta);
+    playback, _ = try mpd.getStatus(ra);
+    try std.testing.expect(playback.volume.? == 100);
+
+    prev_vol = playback.volume.?;
+    delta = -10;
+    playback.volume = changeVol(prev_vol, delta);
+    try std.testing.expect(playback.volume.? == prev_vol - 10);
+
+    try mpd.changeVol(delta);
+    playback, _ = try mpd.getStatus(ra);
+    try std.testing.expect(playback.volume.? == prev_vol - 10);
+
+    prev_vol = playback.volume.?;
+    delta = -100;
+    playback.volume = changeVol(prev_vol, delta);
+    try std.testing.expect(playback.volume.? == 0);
+
+    try mpd.changeVol(delta);
+    playback, _ = try mpd.getStatus(ra);
+    try std.testing.expect(playback.volume.? == 0);
 }
 
 fn scrollHalfDown(

@@ -59,7 +59,6 @@ pub const MissingField = error{
     NoId,
     NoPos,
     NoPlaying,
-    NoVolume,
     NoRepeat,
     NoRandom,
     NoSingle,
@@ -176,12 +175,9 @@ pub fn seek(dir: enum { forward, backward }, seconds: u8) !void {
     try sendCommand(command);
 }
 
-pub fn changeVol(dir: enum { up, down }, change: u8) !void {
-    const command: []const u8 = switch (dir) {
-        .up => try fmt.bufPrint(&cmdBuf, "volume +{}\n", .{change}),
-        .down => try fmt.bufPrint(&cmdBuf, "volume -{}\n", .{change}),
-    };
-    try sendCommand(command);
+pub fn changeVol(delta: i8) !void {
+    const cmd = try fmt.bufPrint(&cmdBuf, "volume {}\n", .{delta});
+    try sendCommand(cmd);
 }
 
 pub fn nextSong() !void {
@@ -292,22 +288,29 @@ pub const Time = struct {
     duration: u16,
 };
 
-// DO NOT CHANGE THE ORDER
-pub const Playback = struct {
-    repeat: bool,
-    random: bool,
-    single: bool,
-    consume: bool,
-    playing: bool,
-    volume: u7,
-};
-
-// DO NOT CHANGE THE ORDER
 const PlayMode = enum {
     repeat,
     random,
     single,
     consume,
+};
+
+pub const Playback = struct {
+    playing: bool,
+    volume: ?u7,
+    repeat: bool,
+    random: bool,
+    single: bool,
+    consume: bool,
+
+    pub fn toggle(self: *Playback, mode: PlayMode) void {
+        inline for (comptime std.meta.fieldNames(PlayMode)) |field| {
+            if (mode == @field(PlayMode, field)) {
+                @field(self, field) = !@field(self, field);
+                return;
+            }
+        }
+    }
 };
 
 pub fn getStatus(ra: mem.Allocator) !struct { Playback, ?Time } {
@@ -355,7 +358,7 @@ pub fn getStatus(ra: mem.Allocator) !struct { Playback, ?Time } {
     return .{
         .{
             .playing = playing orelse return MissingField.NoPlaying,
-            .volume = vol orelse return MissingField.NoVolume,
+            .volume = vol,
             .repeat = repeat orelse return MissingField.NoRepeat,
             .random = random orelse return MissingField.NoRandom,
             .single = single orelse return MissingField.NoSingle,
@@ -385,35 +388,36 @@ test "status" {
 
     const playback, const time = try getStatus(ra);
     debug.print("playing: {}\n", .{playback.playing});
-    debug.print("volume: {}\n", .{playback.volume});
-    debug.print("consume: {}\n", .{playback.consume});
+    debug.print("volume: {?}\n", .{playback.volume});
     debug.print("repeat: {}\n", .{playback.repeat});
     debug.print("random: {}\n", .{playback.random});
     debug.print("single: {}\n", .{playback.single});
+    debug.print("consume: {}\n", .{playback.consume});
     debug.print("time: {?}\n", .{time});
 }
 
-pub fn toggleMode(gpa: mem.Allocator, playmode: PlayMode, playback: *Playback) !void {
-    const name: []const u8 = @tagName(playmode);
-    var currentmode: bool = undefined;
-    inline for (0..4) |i| {
-        if (@intFromEnum(playmode) == i) {
-            currentmode = @field(playback, @typeInfo(Playback).@"struct".fields[i].name);
-            @field(playback, @typeInfo(Playback).@"struct".fields[i].name) = !currentmode;
-        }
-    }
-    const cmd = try fmt.allocPrint(gpa, "{s} {}\n", .{ name, @intFromBool(!currentmode) });
+pub fn toggleMode(gpa: mem.Allocator, mode: PlayMode, val: bool) !void {
+    const cmd = try fmt.allocPrint(gpa, "{s} {}\n", .{ @tagName(mode), @intFromBool(val) });
     try sendCommand(cmd);
 }
 
-test "togglemode" {
+test "toggleall" {
     const alloc = @import("allocators.zig");
     const ra = alloc.respAllocator;
 
     try connect(.command, .block);
 
     var playback, _ = try getStatus(ra);
-    try toggleMode(ra, .single, &playback);
+    const initialpb = playback;
+
+    inline for (comptime std.meta.fields(PlayMode)) |field| {
+        playback.toggle(@enumFromInt(field.value));
+        try toggleMode(ra, @enumFromInt(field.value), @field(playback, field.name));
+        const initial = @field(initialpb, field.name);
+        const flipped = @field(playback, field.name);
+        try std.testing.expect(initial == !flipped);
+        std.debug.print("{s} initial: {} - flipped:  {}\n", .{ field.name, initial, flipped });
+    }
 }
 
 pub const Queue = struct {

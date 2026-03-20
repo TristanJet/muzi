@@ -70,13 +70,11 @@ fn initErr(etty: ?T_NTTY) !void {
 }
 
 pub fn log(comptime format: []const u8, args: anytype) void {
-    if (builtin.mode == .Debug) {
-        if (log_flag) {
-            const msg = fmt.bufPrint(&debug_log.buffer, format ++ "\n", args) catch "ERROR FORMATTING";
-            const no = fmt.bufPrint(debug_log.buffer[msg.len..], "{} -> ", .{debug_log.n}) catch unreachable;
-            _ = posix.writev(logtty.handle, &.{ .{ .base = no.ptr, .len = no.len }, .{ .base = msg.ptr, .len = msg.len } }) catch return;
-            debug_log.n += 1;
-        }
+    if (builtin.mode == .Debug and log_flag) {
+        const msg = fmt.bufPrint(&debug_log.buffer, format ++ "\n", args) catch "ERROR FORMATTING";
+        const no = fmt.bufPrint(debug_log.buffer[msg.len..], "{} -> ", .{debug_log.n}) catch unreachable;
+        _ = posix.writev(logtty.handle, &.{ .{ .base = no.ptr, .len = no.len }, .{ .base = msg.ptr, .len = msg.len } }) catch return;
+        debug_log.n += 1;
     }
 }
 

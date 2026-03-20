@@ -364,14 +364,14 @@ fn writeAlbumArtist(str: []const u8, y: usize, xmin: usize, xmax: usize) !void {
     try term.writeAll(str[0..width.byte_offset]);
 }
 
-fn drawController(modes: mpd.Playback, x: usize, y: usize) !void {
+fn drawController(playback: mpd.Playback, x: usize, y: usize) !void {
+    const modes = [4][:0]const u8{ "repeat", "random", "single", "consume" };
     var buf: [9]u8 = undefined;
     const keys = "[r z s c]";
     const valuestring = "[{c} {c} {c} {c}]";
     var values: struct { u8, u8, u8, u8 } = undefined;
-    inline for (0..4) |i| {
-        const field = @typeInfo(mpd.Playback).@"struct".fields[i];
-        values[i] = if (@field(modes, field.name)) '#' else ' ';
+    inline for (comptime modes, 0..) |mode, i| {
+        values[i] = if (@field(playback, mode)) '#' else '-';
     }
     const controller = try std.fmt.bufPrint(&buf, valuestring, values);
     try term.moveCursor(y, x);
@@ -382,7 +382,7 @@ fn drawController(modes: mpd.Playback, x: usize, y: usize) !void {
 
 fn drawVolume(vol: ?u7, x: usize, y: usize) !void {
     var buf: [10]u8 = undefined;
-    const string: []const u8 = "vol: {d}% ";
+    const string: []const u8 = "vol: {}% ";
     const volstr = try std.fmt.bufPrint(&buf, string, .{vol orelse ' '});
 
     try term.moveCursor(y, x);
