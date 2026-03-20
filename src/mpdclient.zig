@@ -54,6 +54,18 @@ pub const MemoryError = error{
     OutOfMemory,
 };
 
+pub const MissingField = error{
+    NoFileUri,
+    NoId,
+    NoPos,
+    NoPlaying,
+    NoVolume,
+    NoRepeat,
+    NoRandom,
+    NoSingle,
+    NoConsume,
+};
+
 pub const MpdError = error{
     Invalid,
     TooLong,
@@ -61,7 +73,6 @@ pub const MpdError = error{
     NotPlaying,
     BadIndex,
     QueueEmpty,
-    MissingField,
     BadState,
 };
 
@@ -265,9 +276,9 @@ pub fn getCurrentSong(ra: mem.Allocator, time: ?Time) !CurrentSong {
     }
 
     return CurrentSong{
-        .uri = songuri orelse return MpdError.MissingField,
-        .pos = pos orelse return MpdError.MissingField,
-        .id = id orelse return MpdError.MissingField,
+        .uri = songuri orelse return MissingField.NoFileUri,
+        .pos = pos orelse return MissingField.NoPos,
+        .id = id orelse return MissingField.NoId,
         .title = songtitle,
         .artist = songartist,
         .album = songalbum,
@@ -343,12 +354,12 @@ pub fn getStatus(ra: mem.Allocator) !struct { Playback, ?Time } {
 
     return .{
         .{
-            .playing = playing orelse return MpdError.MissingField,
-            .volume = vol orelse return MpdError.MissingField,
-            .repeat = repeat orelse return MpdError.MissingField,
-            .random = random orelse return MpdError.MissingField,
-            .single = single orelse return MpdError.MissingField,
-            .consume = consume orelse return MpdError.MissingField,
+            .playing = playing orelse return MissingField.NoPlaying,
+            .volume = vol orelse return MissingField.NoVolume,
+            .repeat = repeat orelse return MissingField.NoRepeat,
+            .random = random orelse return MissingField.NoRandom,
+            .single = single orelse return MissingField.NoSingle,
+            .consume = consume orelse return MissingField.NoConsume,
         },
         time,
     };

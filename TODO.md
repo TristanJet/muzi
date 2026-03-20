@@ -1,5 +1,7 @@
 # muzi
 
+### Missing field issue #1
+
 ### REPLACE NON-BLOCKING SOCKET ON TTY
 - Poll
 
@@ -8,6 +10,7 @@
 
 ### BUGS
 - [x] specify log and panic tty
+- [ ] blocking connect - wait for std.Io 
 - [ ] next and prev should change playmode if paused or stopped
 - [ ] replace split with tokenize
 - [ ] browser handle no tags testing
