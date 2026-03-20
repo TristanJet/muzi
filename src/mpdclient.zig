@@ -303,13 +303,8 @@ pub const Playback = struct {
     single: bool,
     consume: bool,
 
-    pub fn toggle(self: *Playback, mode: PlayMode) void {
-        inline for (comptime std.meta.fieldNames(PlayMode)) |field| {
-            if (mode == @field(PlayMode, field)) {
-                @field(self, field) = !@field(self, field);
-                return;
-            }
-        }
+    pub fn toggle(self: *Playback, comptime mode: PlayMode) void {
+        @field(self, @tagName(mode)) = !@field(self, @tagName(mode));
     }
 };
 
