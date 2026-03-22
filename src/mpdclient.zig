@@ -24,8 +24,6 @@ var cmdBuf: [64]u8 = undefined;
 
 var readbuf: [4096]u8 = undefined;
 
-var current_song_buf: [CurrentSong.MAX_LEN * 4]u8 = undefined;
-
 const StreamType = enum {
     command,
     idle,
@@ -205,7 +203,7 @@ pub fn playById(allocator: mem.Allocator, id: usize) !void {
 }
 
 pub const CurrentSong = struct {
-    pub const MAX_LEN = 64;
+    pub const STR_MAX_LEN = 64;
 
     uri: []const u8,
     pos: usize,
@@ -216,6 +214,8 @@ pub const CurrentSong = struct {
     album: ?[]const u8,
     trackno: ?u16,
 };
+
+var current_song_buf: [CurrentSong.STR_MAX_LEN * 4]u8 = undefined;
 
 pub fn getCurrentSong(ra: mem.Allocator, time: ?Time) !CurrentSong {
     var lines = sendAndSplit("currentsong\n", ra) catch |e|
