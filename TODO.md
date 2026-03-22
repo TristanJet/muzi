@@ -6,12 +6,12 @@
 ### FIXES
 - [ ] song features not displaying in the artist -> album tab: Tyler, the creaotr -> Flower Boy
 - [ ] next and prev should change playmode if paused or stopped
-- [ ] replace split with tokenize
 - [ ] deprecate "Time:" field
 - [ ] browser handle no tags testing
 - [ ] blocking connect - wait for std.Io 
 - [ ] Fix apostrophe searching
 - [ ] ESC bug
+- [x] replace split with tokenize
 
 ### REFACTOR
 - [ ] clean up main.zig

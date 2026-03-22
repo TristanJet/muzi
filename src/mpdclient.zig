@@ -224,60 +224,40 @@ pub fn getCurrentSong(ra: mem.Allocator, time: ?Time) !CurrentSong {
         else
             return e;
 
-    var songuri: ?[]const u8 = null;
-    var songtitle: ?[]const u8 = null;
-    var songartist: ?[]const u8 = null;
-    var songalbum: ?[]const u8 = null;
     var trackno: ?u16 = null;
     var pos: ?usize = null;
     var id: ?usize = null;
 
+    const str_keys = [_][]const u8{ "file", "Title", "Artist", "Album" };
+    var str_values: [str_keys.len]?[]const u8 = @splat(null);
+
     var bufend: u16 = 0;
-    while (lines.next()) |line| {
-        if (mem.startsWith(u8, line, "file:")) {
-            const uri = mem.trimLeft(u8, line[5..], " ");
-            const len: u16 = @min(uri.len, CurrentSong.MAX_LEN);
-            @memcpy(current_song_buf[bufend .. bufend + len], uri[0..len]);
-            songuri = current_song_buf[bufend .. bufend + len];
-            bufend += len;
-        } else if (mem.startsWith(u8, line, "Title:")) {
-            const title = mem.trimLeft(u8, line[6..], " ");
-            const len: u16 = @min(title.len, CurrentSong.MAX_LEN);
-            @memcpy(current_song_buf[bufend .. bufend + len], title[0..len]);
-            songtitle = current_song_buf[bufend .. bufend + len];
-            bufend += len;
-        } else if (mem.startsWith(u8, line, "Artist:")) {
-            const artist = mem.trimLeft(u8, line[7..], " ");
-            const len: u16 = @min(artist.len, CurrentSong.MAX_LEN);
-            @memcpy(current_song_buf[bufend .. bufend + len], artist[0..len]);
-            songartist = current_song_buf[bufend .. bufend + len];
-            bufend += len;
-        } else if (mem.startsWith(u8, line, "Album:")) {
-            const album = mem.trimLeft(u8, line[6..], " ");
-            const len: u16 = @min(album.len, CurrentSong.MAX_LEN);
-            @memcpy(current_song_buf[bufend .. bufend + len], album[0..len]);
-            songalbum = current_song_buf[bufend .. bufend + len];
-            bufend += len;
-        } else if (mem.startsWith(u8, line, "Track:")) {
-            const trackno_str = mem.trimLeft(u8, line[6..], " ");
-            util.log("trackno: {s}", .{trackno_str});
-            trackno = try fmt.parseInt(u16, trackno_str, 10);
-        } else if (mem.startsWith(u8, line, "Pos:")) {
-            const pos_str = mem.trimLeft(u8, line[4..], " ");
-            pos = try fmt.parseInt(usize, pos_str, 10);
-        } else if (mem.startsWith(u8, line, "Id:")) {
-            const id_str = mem.trimLeft(u8, line[3..], " ");
-            id = try fmt.parseInt(usize, id_str, 10);
+    response: while (lines.next()) |line| {
+        for (str_keys, &str_values) |k, *v| {
+            if (mem.startsWith(u8, line, k)) {
+                const val = line[k.len + 2 ..];
+                const len: u16 = @min(val.len, CurrentSong.STR_MAX_LEN);
+                @memcpy(current_song_buf[bufend .. bufend + len], val[0..len]);
+                v.* = current_song_buf[bufend .. bufend + len];
+                bufend += len;
+                continue :response;
+            }
         }
+        if (mem.startsWith(u8, line, "Track"))
+            trackno = try fmt.parseInt(u16, line["Track".len + 2 ..], 10)
+        else if (mem.startsWith(u8, line, "Pos"))
+            pos = try fmt.parseInt(usize, line["Pos".len + 2 ..], 10)
+        else if (mem.startsWith(u8, line, "Id"))
+            id = try fmt.parseInt(usize, line["Id".len + 2 ..], 10);
     }
 
     return CurrentSong{
-        .uri = songuri orelse return MissingField.NoFileUri,
+        .uri = str_values[0] orelse return MissingField.NoFileUri,
         .pos = pos orelse return MissingField.NoPos,
         .id = id orelse return MissingField.NoId,
-        .title = songtitle,
-        .artist = songartist,
-        .album = songalbum,
+        .title = str_values[1],
+        .artist = str_values[2],
+        .album = str_values[3],
         .trackno = trackno,
         .time = time orelse .{ .elapsed = 0, .duration = 0 },
     };
@@ -330,16 +310,16 @@ pub fn getStatus(ra: mem.Allocator) !struct { Playback, ?Time } {
         } else if (mem.startsWith(u8, line, "volume:")) {
             const str = mem.trimEnd(u8, line[8..], " \n");
             vol = try fmt.parseInt(u7, str, 10);
-        } else if (mem.startsWith(u8, line, "repeat:")) {
-            repeat = try parseMode(line[8..9]);
-        } else if (mem.startsWith(u8, line, "random:")) {
-            random = try parseMode(line[8..9]);
-        } else if (mem.startsWith(u8, line, "single:")) {
-            single = try parseMode(line[8..9]);
-        } else if (mem.startsWith(u8, line, "consume:")) {
-            consume = try parseMode(line[9..10]);
-        } else if (mem.startsWith(u8, line, "time:")) {
-            const str = mem.trimLeft(u8, line[5..], " ");
+        } else if (mem.startsWith(u8, line, "repeat:"))
+            repeat = try parseMode(line[8..9])
+        else if (mem.startsWith(u8, line, "random:"))
+            random = try parseMode(line[8..9])
+        else if (mem.startsWith(u8, line, "single:"))
+            single = try parseMode(line[8..9])
+        else if (mem.startsWith(u8, line, "consume:"))
+            consume = try parseMode(line[9..10])
+        else if (mem.startsWith(u8, line, "time:")) {
+            const str = mem.trimStart(u8, line[5..], " ");
             const index = mem.indexOfScalar(u8, str, ':') orelse return MpdError.BadState;
             const elapsed = str[0..index];
             const duration = str[index + 1 ..];
@@ -831,7 +811,7 @@ pub fn getPlaylistLen(respAllocator: mem.Allocator) !usize {
     var lines = try sendAndSplit(command, respAllocator);
     while (lines.next()) |line| {
         if (mem.startsWith(u8, line, "playlistlength:")) {
-            const slice = mem.trimLeft(u8, line[15..], " ");
+            const slice = mem.trimStart(u8, line[15..], " ");
             return fmt.parseUnsigned(usize, slice, 10);
         }
     }
@@ -899,7 +879,7 @@ fn allocQueue(
     artistbuf: *ring.StrBuffer(QSong.MAX_STR_LEN),
     N: usize,
 ) !usize {
-    var lines: mem.SplitIterator(u8, .scalar) = undefined;
+    var lines: mem.TokenIterator(u8, .scalar) = undefined;
     var next: *const fn (*SongIterator) ?[]const u8 = undefined;
     var strwrite: *const fn (*ring.StrBuffer(QSong.MAX_STR_LEN), Ring, []const u8) []const u8 = undefined;
     var songwrite: *const fn (*ring.Buffer(QSong), Ring, QSong) void = undefined;
@@ -920,7 +900,7 @@ fn allocQueue(
     }
     var added: usize = 0;
     while (next(songs)) |song| {
-        lines = mem.splitScalar(u8, song, '\n');
+        lines = mem.tokenizeScalar(u8, song, '\n');
         var uri: ?[]const u8 = null;
         var title: ?[]const u8 = null;
         var artist: ?[]const u8 = null;
@@ -930,22 +910,22 @@ fn allocQueue(
 
         while (lines.next()) |line| {
             if (mem.startsWith(u8, line, "file:")) {
-                const str = mem.trimLeft(u8, line[5..], " ");
+                const str = mem.trimStart(u8, line[5..], " ");
                 uri = strwrite(uribuf, r.*, str);
             } else if (mem.startsWith(u8, line, "Title:")) {
-                const str = mem.trimLeft(u8, line[6..], " ");
+                const str = mem.trimStart(u8, line[6..], " ");
                 title = strwrite(titlebuf, r.*, str);
             } else if (mem.startsWith(u8, line, "Artist:")) {
-                const str = mem.trimLeft(u8, line[7..], " ");
+                const str = mem.trimStart(u8, line[7..], " ");
                 artist = strwrite(artistbuf, r.*, str);
             } else if (mem.startsWith(u8, line, "Time:")) {
-                const str = mem.trimLeft(u8, line[5..], " ");
+                const str = mem.trimStart(u8, line[5..], " ");
                 time = try std.fmt.parseInt(u16, str, 10);
             } else if (mem.startsWith(u8, line, "Pos:")) {
-                const str = mem.trimLeft(u8, line[4..], " ");
+                const str = mem.trimStart(u8, line[4..], " ");
                 pos = try fmt.parseInt(usize, str, 10);
             } else if (mem.startsWith(u8, line, "Id:")) {
-                const str = mem.trimLeft(u8, line[3..], " ");
+                const str = mem.trimStart(u8, line[3..], " ");
                 id = try fmt.parseInt(usize, str, 10);
             }
         }
@@ -970,11 +950,11 @@ fn allocQueue(
 }
 
 fn queueToBuf(buf: []QSong, strbuf: []u8, songs: *SongIterator, N: usize) !void {
-    var lines: mem.SplitIterator(u8, .scalar) = undefined;
+    var lines: mem.TokenIterator(u8, .scalar) = undefined;
     var songi: usize = 0;
     var istr: usize = 0;
     while (songs.next()) |song| {
-        lines = mem.splitScalar(u8, song, '\n');
+        lines = mem.tokenizeScalar(u8, song, '\n');
         var uri: ?[]const u8 = null;
         var title: ?[]const u8 = null;
         var artist: ?[]const u8 = null;
@@ -984,28 +964,28 @@ fn queueToBuf(buf: []QSong, strbuf: []u8, songs: *SongIterator, N: usize) !void 
 
         while (lines.next()) |line| {
             if (mem.startsWith(u8, line, "file:")) {
-                const str = mem.trimLeft(u8, line[5..], " ");
+                const str = mem.trimStart(u8, line[5..], " ");
                 @memcpy(strbuf[istr .. istr + str.len], str);
                 uri = strbuf[istr .. istr + str.len];
                 istr += str.len;
             } else if (mem.startsWith(u8, line, "Title:")) {
-                const str = mem.trimLeft(u8, line[6..], " ");
+                const str = mem.trimStart(u8, line[6..], " ");
                 @memcpy(strbuf[istr .. istr + str.len], str);
                 title = strbuf[istr .. istr + str.len];
                 istr += str.len;
             } else if (mem.startsWith(u8, line, "Artist:")) {
-                const str = mem.trimLeft(u8, line[7..], " ");
+                const str = mem.trimStart(u8, line[7..], " ");
                 @memcpy(strbuf[istr .. istr + str.len], str);
                 artist = strbuf[istr .. istr + str.len];
                 istr += str.len;
             } else if (mem.startsWith(u8, line, "Time:")) {
-                const str = mem.trimLeft(u8, line[5..], " ");
+                const str = mem.trimStart(u8, line[5..], " ");
                 time = try fmt.parseInt(u16, str, 10);
             } else if (mem.startsWith(u8, line, "Pos:")) {
-                const str = mem.trimLeft(u8, line[4..], " ");
+                const str = mem.trimStart(u8, line[4..], " ");
                 pos = try fmt.parseInt(usize, str, 10);
             } else if (mem.startsWith(u8, line, "Id:")) {
-                const str = mem.trimLeft(u8, line[3..], " ");
+                const str = mem.trimStart(u8, line[3..], " ");
                 id = try fmt.parseInt(usize, str, 10);
             }
         }
@@ -1080,10 +1060,10 @@ test "fill" {
     }
 }
 
-fn sendAndSplit(command: []const u8, ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError || posix.WriteError)!mem.SplitIterator(u8, .scalar) {
+fn sendAndSplit(command: []const u8, ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError || posix.WriteError)!mem.TokenIterator(u8, .scalar) {
     _ = try posix.write(cmdStream.handle, command);
     const bytes = try readCmd(ra);
-    return mem.splitScalar(u8, bytes, '\n');
+    return mem.tokenizeScalar(u8, bytes, '\n');
 }
 
 pub fn readCmd(ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError)![]u8 {
@@ -1385,7 +1365,7 @@ pub fn listAllData(respAllocator: std.mem.Allocator) ![]u8 {
 
 pub fn getAllSongs(heapAllocator: mem.Allocator, data: []const u8) ![]SongStringAndUri {
     var songs: ArrayList(SongStringAndUri) = .empty;
-    var lines = mem.splitScalar(u8, data, '\n');
+    var lines = mem.tokenizeScalar(u8, data, '\n');
 
     var current_uri: ?[]const u8 = null;
     var current_title: ?[]const u8 = null;
@@ -1425,11 +1405,11 @@ pub fn getAllSongs(heapAllocator: mem.Allocator, data: []const u8) ![]SongString
 
 pub fn getUris(ha: mem.Allocator, data: []const u8) ![][]const u8 {
     var uris: ArrayList([]const u8) = .empty;
-    var lines = mem.splitScalar(u8, data, '\n');
+    var lines = mem.tokenizeScalar(u8, data, '\n');
 
     while (lines.next()) |line| {
         if (mem.startsWith(u8, line, "file:")) {
-            const str = mem.trimLeft(u8, line[5..], " ");
+            const str = mem.trimStart(u8, line[5..], " ");
             try uris.append(ha, try ha.dupe(u8, str));
         }
     }
@@ -1439,7 +1419,7 @@ pub fn getUris(ha: mem.Allocator, data: []const u8) ![][]const u8 {
 
 pub fn getSongStringAndUri(heapAllocator: mem.Allocator, data: []const u8) ![]SongStringAndUri {
     var array: ArrayList(SongStringAndUri) = .empty;
-    var lines = mem.splitScalar(u8, data, '\n');
+    var lines = mem.tokenizeScalar(u8, data, '\n');
     var current_uri: ?[]const u8 = null;
     var title: ?[]const u8 = null;
     var artist: ?[]const u8 = null;
@@ -1572,7 +1552,7 @@ pub fn getYanked(start: usize, stop: usize, out: *Yanked, ra: mem.Allocator) !vo
     try out.reset();
     while (lines.next()) |line| {
         if (mem.startsWith(u8, line, "file:")) {
-            try out.append(mem.trimLeft(u8, line[5..], " "));
+            try out.append(mem.trimStart(u8, line[5..], " "));
         }
     }
 }
