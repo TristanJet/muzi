@@ -97,7 +97,7 @@ pub fn render(
     render_state: *RenderState(n_browse_columns),
     panels: window.Panels,
     end_index: *usize,
-) (std.Io.File.Writer.Error || mem.Allocator.Error || state.ColumnArray(n_browse_columns).Error || state.Error)!void {
+) (util.WriteError || mem.Allocator.Error || state.ColumnArray(n_browse_columns).Error || state.Error)!void {
     current = app.*;
     if (render_state.borders) try drawBorders(panels.curr_song.area);
     if (render_state.borders) try drawBorders(panels.queue.area);

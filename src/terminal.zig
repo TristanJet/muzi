@@ -11,7 +11,7 @@ const os = std.os;
 const posix = std.posix;
 
 var tty: std.Io.File = undefined;
-var writer: std.Io.File.Writer = undefined;
+var writer: TtyWriter = undefined;
 var out: *std.Io.Writer = undefined;
 
 // Use posix.termios which is platform-independent
@@ -40,7 +40,38 @@ const ReadError = error{
     Unexpected,
 };
 
-const WriteError = std.Io.File.Writer.Error;
+const WriteError = util.WriteError;
+
+// std.Io.File.Writer treats EAGAIN on a non-blocking fd as a bug, so the tty
+// gets a writer over raw write() that reports WouldBlock for the retry loops below
+const TtyWriter = struct {
+    handle: posix.fd_t,
+    err: ?WriteError = null,
+    interface: std.Io.Writer,
+
+    fn init(handle: posix.fd_t, buf: []u8) TtyWriter {
+        return .{
+            .handle = handle,
+            .interface = .{ .vtable = &.{ .drain = drain }, .buffer = buf },
+        };
+    }
+
+    fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const self: *TtyWriter = @alignCast(@fieldParentPtr("interface", w));
+        if (w.end != 0) {
+            const n = util.write(self.handle, w.buffered()) catch |e| {
+                self.err = e;
+                return error.WriteFailed;
+            };
+            return w.consume(n);
+        }
+        if (data.len == 1 and splat == 0) return 0;
+        return util.write(self.handle, data[0]) catch |e| {
+            self.err = e;
+            return error.WriteFailed;
+        };
+    }
+};
 
 pub const OSError = error{
     NotPosix,
@@ -154,7 +185,7 @@ fn getTty() !void {
             .lock_nonblocking = false,
         },
     );
-    writer = tty.writerStreaming(util.io, &buffer);
+    writer = .init(tty.handle, &buffer);
     out = &writer.interface;
 }
 
