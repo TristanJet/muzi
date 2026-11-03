@@ -220,7 +220,7 @@ var current_song_buf: [CurrentSong.STR_MAX_LEN * 4]u8 = undefined;
 pub fn getCurrentSong(ra: mem.Allocator, time: ?Time) !CurrentSong {
     var lines = sendAndSplit("currentsong\n", ra) catch |e|
         if (e == MpdError.NoSongs)
-            try sendAndSplit("playlistid 0\n", ra)
+            try sendAndSplit("playlistinfo 0\n", ra)
         else
             return e;
 
