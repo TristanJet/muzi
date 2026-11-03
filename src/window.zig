@@ -55,13 +55,13 @@ const Dim = union(DimType) {
     },
 };
 
-pub fn init(tty: fs.File.Handle) WindowError!void {
+pub fn init(tty: std.Io.File.Handle) WindowError!void {
     try getWindow(tty);
     panels.init(window);
     y_len_ptr.* = panels.find.validArea().ylen;
 }
 
-fn getWindow(ttyfd: fs.File.Handle) WindowError!void {
+fn getWindow(ttyfd: std.Io.File.Handle) WindowError!void {
     var win_size = posix.winsize{
         .row = 0,
         .col = 0,

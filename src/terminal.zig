@@ -10,9 +10,9 @@ const fs = std.fs;
 const os = std.os;
 const posix = std.posix;
 
-var tty: fs.File = undefined;
-var writer: fs.File.Writer = undefined;
-var out: *std.io.Writer = undefined;
+var tty: std.Io.File = undefined;
+var writer: std.Io.File.Writer = undefined;
+var out: *std.Io.Writer = undefined;
 
 // Use posix.termios which is platform-independent
 var raw: posix.termios = undefined;
@@ -40,14 +40,14 @@ const ReadError = error{
     Unexpected,
 };
 
-const WriteError = fs.File.WriteError;
+const WriteError = std.Io.File.Writer.Error;
 
 pub const OSError = error{
     NotPosix,
 };
 
 pub fn init() !void {
-    errdefer tty.close();
+    errdefer tty.close(util.io);
     try getTty();
     try win.init(tty.handle);
     caps = try detectTerminal();
@@ -78,14 +78,14 @@ pub fn detectTerminal() OSError!Capabilities {
 }
 
 fn isTTY() bool {
-    if (posix.getenv("TERM")) |term| {
+    if (util.environ.getPosix("TERM")) |term| {
         return mem.eql(u8, term, "linux");
     }
     return false;
 }
 
 fn supportsTrueColor() bool {
-    if (posix.getenv("COLORTERM")) |colorterm| {
+    if (util.environ.getPosix("COLORTERM")) |colorterm| {
         if (mem.eql(u8, colorterm, "truecolor") or
             mem.eql(u8, colorterm, "24bit"))
         {
@@ -94,7 +94,7 @@ fn supportsTrueColor() bool {
     }
 
     if (comptime native_os == .macos) {
-        if (posix.getenv("TERM_PROGRAM")) |term_program| {
+        if (util.environ.getPosix("TERM_PROGRAM")) |term_program| {
             if (mem.eql(u8, term_program, "Apple_Terminal")) {
                 return true;
             }
@@ -144,16 +144,17 @@ pub const Symbols = struct {
 };
 
 fn getTty() !void {
-    tty = try fs.cwd().openFile(
+    tty = try std.Io.Dir.cwd().openFile(
+        util.io,
         "/dev/tty",
         .{
-            .mode = fs.File.OpenMode.read_write,
+            .mode = .read_write,
             .allow_ctty = false,
             .lock = .none,
             .lock_nonblocking = false,
         },
     );
-    writer = tty.writerStreaming(&buffer);
+    writer = tty.writerStreaming(util.io, &buffer);
     out = &writer.interface;
 }
 
@@ -172,7 +173,7 @@ pub fn flush() WriteError!void {
             WriteError.WouldBlock => {
                 util.log("would block", .{});
                 if (failed < 3) failed += 1 else return writer.err.?;
-                std.Thread.sleep(retry_sleep_ns);
+                util.sleep(retry_sleep_ns);
                 continue;
             },
             else => return writer.err.?,
@@ -188,7 +189,7 @@ pub fn writeAll(bytes: []const u8) WriteError!void {
             WriteError.WouldBlock => {
                 util.log("would block", .{});
                 if (failed < 3) failed += 1 else return writer.err.?;
-                std.Thread.sleep(retry_sleep_ns);
+                util.sleep(retry_sleep_ns);
                 continue;
             },
             else => return writer.err.?,
@@ -204,7 +205,7 @@ pub fn writeByteNTimes(byte: u8, n: usize) WriteError!void {
             WriteError.WouldBlock => {
                 util.log("would block", .{});
                 if (failed < 3) failed += 1 else return writer.err.?;
-                std.Thread.sleep(retry_sleep_ns);
+                util.sleep(retry_sleep_ns);
                 continue;
             },
             else => return writer.err.?,
@@ -226,7 +227,7 @@ pub fn readEscapeCode(read_buffer: []u8) ReadError!usize {
     raw.cc[@intFromEnum(posix.V.MIN)] = 0;
     try posix.tcsetattr(tty.handle, .NOW, raw);
 
-    const escRead = tty.read(read_buffer) catch |err| switch (err) {
+    const escRead = posix.read(tty.handle, read_buffer) catch |err| switch (err) {
         error.WouldBlock => 0, // No input available
         else => return ReadError.Unexpected,
     };
@@ -239,8 +240,8 @@ pub fn readEscapeCode(read_buffer: []u8) ReadError!usize {
 }
 
 fn setNonBlock() !void {
-    const flags = try posix.fcntl(tty.handle, posix.F.GETFL, 0);
-    const updated_flags = try posix.fcntl(tty.handle, posix.F.SETFL, util.flagNonBlock(flags));
+    const flags = try util.fcntl(tty.handle, posix.F.GETFL, 0);
+    const updated_flags = try util.fcntl(tty.handle, posix.F.SETFL, util.flagNonBlock(flags));
     if ((updated_flags & 0x0004) != 0) return error.NonBlockError;
 }
 
@@ -263,7 +264,7 @@ pub fn deinit() !void {
     // try posix.tcsetattr(tty.handle, .FLUSH, raw);
     //
     try cook();
-    tty.close();
+    tty.close(util.io);
 }
 
 fn uncook() !void {

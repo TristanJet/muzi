@@ -227,7 +227,7 @@ test "display width" {
     const string = "작은 것들을 위한 시 (Boy With Luv)";
     // const string = "ペルソナ3 オリジナル･サウンドトラック";
     const width = dw.strWidth(string);
-    const zeroes = [_]u8{'0'} ** 1024;
+    const zeroes: [1024]u8 = @splat('0');
     util.log("Width: {}\nString:\n{s}\n{s}", .{ width, string, zeroes[0..width] });
 }
 
@@ -238,7 +238,7 @@ test "fitting bytes" {
 
     const string = "작은 것들을 위한 시 (Boy With Luv)";
     // const string = "ペルソナ3 オリジナル･サウンドトラック";
-    const zeroes = [_]u8{'0'} ** 1024;
+    const zeroes: [1024]u8 = @splat('0');
     const s = lookupWidth(dw, 11, string);
     const offset = s[0];
     util.log("Max: 11\nString:\n{s}\n{s}", .{ string[0..offset], zeroes[0..11] });

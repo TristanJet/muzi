@@ -1104,7 +1104,7 @@ fn getSearchStrings(strings: []const []const u8, allocator: mem.Allocator) ![][]
 }
 fn debounce() bool {
     //input debounce
-    const app_time = time.milliTimestamp();
+    const app_time = util.milliTimestamp();
     const diff = app_time - last_input;
     if (diff < 150) {
         return true;

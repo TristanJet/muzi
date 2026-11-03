@@ -27,10 +27,12 @@ const wrkallocator = alloc.wrkallocator;
 const wrkfba = &alloc.wrkfba;
 const wrkbuf = &alloc.wrkbuf;
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    util.io = init.io;
+    util.environ = init.minimal.environ;
     defer alloc.deinit();
 
-    const args = proc.handleArgs() catch |e| switch (e) {
+    const args = proc.handleArgs(init.minimal.args) catch |e| switch (e) {
         error.InvalidOption => {
             try proc.printInvArg();
             return;
@@ -134,7 +136,7 @@ pub fn main() !void {
         .bar_init = true,
         .currently_filled = 0,
 
-        .last_ping = time.milliTimestamp(),
+        .last_ping = util.milliTimestamp(),
 
         .queue = &queue,
         .scroll_q = state.QueueScroll{
@@ -176,13 +178,13 @@ pub fn main() !void {
 
     util.log("init complete - beginning main loop", .{});
     while (!app.state.quit) {
-        const loop_start_time = time.milliTimestamp();
+        const loop_start_time = util.milliTimestamp();
 
         defer {
-            const frame_time = time.milliTimestamp() - loop_start_time;
+            const frame_time = util.milliTimestamp() - loop_start_time;
             if (frame_time < target_frame_time_ms) {
                 const sleep_time: u64 = @intCast((target_frame_time_ms - frame_time) * time.ns_per_ms);
-                std.Thread.sleep(sleep_time);
+                util.sleep(sleep_time);
             }
         }
 

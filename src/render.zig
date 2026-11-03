@@ -31,11 +31,11 @@ pub fn RenderState(n_col: comptime_int) type {
         find_cursor: bool = false,
         find_clear: bool = false,
         type: bool = false,
-        browse_col: [n_col]bool = .{false} ** n_col,
+        browse_col: [n_col]bool = @splat(false),
         browse_bar: bool = false,
-        browse_cursor: [n_col]bool = .{false} ** n_col,
-        browse_clear_cursor: [n_col]bool = .{false} ** n_col,
-        browse_clear: [n_col]bool = .{false} ** n_col,
+        browse_cursor: [n_col]bool = @splat(false),
+        browse_clear_cursor: [n_col]bool = @splat(false),
+        browse_clear: [n_col]bool = @splat(false),
 
         pub fn init() Self {
             return Self{
@@ -48,11 +48,11 @@ pub fn RenderState(n_col: comptime_int) type {
                 .find_cursor = false,
                 .find_clear = false,
                 .type = false,
-                .browse_col = .{true} ** n_col,
+                .browse_col = @splat(true),
                 .browse_bar = true,
-                .browse_cursor = .{false} ** n_col,
-                .browse_clear_cursor = .{false} ** n_col,
-                .browse_clear = .{false} ** n_col,
+                .browse_cursor = @splat(false),
+                .browse_clear_cursor = @splat(false),
+                .browse_clear = @splat(false),
             };
         }
 
@@ -66,11 +66,11 @@ pub fn RenderState(n_col: comptime_int) type {
             self.find_cursor = false;
             self.find_clear = false;
             self.type = false;
-            self.browse_col = .{false} ** n_col;
+            self.browse_col = @splat(false);
             self.browse_bar = false;
-            self.browse_cursor = .{false} ** n_col;
-            self.browse_clear_cursor = .{false} ** n_col;
-            self.browse_clear = .{false} ** n_col;
+            self.browse_cursor = @splat(false);
+            self.browse_clear_cursor = @splat(false);
+            self.browse_clear = @splat(false);
         }
     };
 }
@@ -97,7 +97,7 @@ pub fn render(
     render_state: *RenderState(n_browse_columns),
     panels: window.Panels,
     end_index: *usize,
-) (fs.File.WriteError || mem.Allocator.Error || state.ColumnArray(n_browse_columns).Error || state.Error)!void {
+) (std.Io.File.Writer.Error || mem.Allocator.Error || state.ColumnArray(n_browse_columns).Error || state.Error)!void {
     current = app.*;
     if (render_state.borders) try drawBorders(panels.curr_song.area);
     if (render_state.borders) try drawBorders(panels.queue.area);

@@ -7,7 +7,7 @@ const Idle = state.Idle;
 const Event = state.Event;
 const log = util.log;
 
-const net = std.net;
+const net = std.Io.net;
 const mem = std.mem;
 const fmt = std.fmt;
 const debug = std.debug;
@@ -17,8 +17,8 @@ const ArrayList = std.ArrayList;
 var host: [4]u8 = .{ 127, 0, 0, 1 };
 var port: u16 = 6600;
 
-var cmdStream: std.net.Stream = undefined;
-var idleStream: std.net.Stream = undefined;
+var cmdStream: net.Stream = undefined;
+var idleStream: net.Stream = undefined;
 
 var cmdBuf: [64]u8 = undefined;
 
@@ -75,8 +75,8 @@ pub const MpdError = error{
 
 /// Sends an MPD command and checks for OK response
 fn sendCommand(command: []const u8) (StreamError || MpdError)!void {
-    _ = posix.write(cmdStream.handle, command) catch return StreamError.WriteError;
-    const n = posix.read(cmdStream.handle, &cmdBuf) catch return StreamError.ReadError;
+    _ = util.write(cmdStream.socket.handle, command) catch return StreamError.WriteError;
+    const n = posix.read(cmdStream.socket.handle, &cmdBuf) catch return StreamError.ReadError;
     if (n == 0) return StreamError.NoResponse;
     if (mem.eql(u8, cmdBuf[0..3], "OK\n")) return;
     if (mem.eql(u8, cmdBuf[0..3], "ACK")) {
@@ -93,18 +93,18 @@ pub fn handleArgs(arg_host: ?[4]u8, arg_port: ?u16) void {
 }
 
 pub fn connect(stream_type: StreamType, flag: ConnectionFlag) (StreamError || MpdError)!void {
-    const peer = net.Address.initIp4(host, port);
+    const peer: net.IpAddress = .{ .ip4 = .{ .bytes = host, .port = port } };
 
-    const stream = net.tcpConnectToAddress(peer) catch return StreamError.ServerNotFound;
+    const stream = peer.connect(util.io, .{ .mode = .stream }) catch return StreamError.ServerNotFound;
 
-    const bytes_read = posix.read(stream.handle, &cmdBuf) catch return StreamError.ReadError;
+    const bytes_read = posix.read(stream.socket.handle, &cmdBuf) catch return StreamError.ReadError;
     const received_data = cmdBuf[0..bytes_read];
 
     if (bytes_read < 2 or !mem.eql(u8, received_data[0..2], "OK")) return MpdError.Invalid;
 
     if (flag == .nonblock) {
-        const flags = posix.fcntl(stream.handle, posix.F.GETFL, 0) catch return StreamError.FcntlError;
-        const updated = posix.fcntl(stream.handle, posix.F.SETFL, util.flagNonBlock(flags)) catch return StreamError.FcntlError;
+        const flags = util.fcntl(stream.socket.handle, posix.F.GETFL, 0) catch return StreamError.FcntlError;
+        const updated = util.fcntl(stream.socket.handle, posix.F.SETFL, util.flagNonBlock(flags)) catch return StreamError.FcntlError;
         if ((updated & 0x0004) != 0) return StreamError.FcntlError;
     }
 
@@ -123,12 +123,12 @@ pub fn disconnect(stream_type: StreamType) void {
         .command => cmdStream,
         .idle => idleStream,
     };
-    stream.close();
+    stream.close(util.io);
 }
 
 pub fn initIdle() StreamError!void {
     const msg = "idle player playlist\n";
-    const n = posix.write(idleStream.handle, msg) catch return StreamError.WriteError;
+    const n = util.write(idleStream.socket.handle, msg) catch return StreamError.WriteError;
     util.log("n written idle: {}", .{n});
     if (n != msg.len) return StreamError.WriteError;
 }
@@ -136,7 +136,7 @@ pub fn initIdle() StreamError!void {
 pub fn checkIdle() ![2]?Event {
     var event: [2]?Event = .{ null, null };
     while (true) {
-        const n = posix.read(idleStream.handle, &cmdBuf) catch |err| switch (err) {
+        const n = posix.read(idleStream.socket.handle, &cmdBuf) catch |err| switch (err) {
             error.WouldBlock => return .{ null, null },
             else => return err,
         };
@@ -865,7 +865,7 @@ const Boundary = struct {
 fn fetchQueueBuf(respAllocator: mem.Allocator, start: usize, end: usize) ![]const u8 {
     const command = try fmt.allocPrint(respAllocator, "playlistinfo {}:{}\n", .{ start, end });
     util.log("fetching: {s}", .{command});
-    _ = posix.write(cmdStream.handle, command) catch return StreamError.WriteError;
+    _ = util.write(cmdStream.socket.handle, command) catch return StreamError.WriteError;
     return try readCmd(respAllocator);
 }
 
@@ -1060,8 +1060,8 @@ test "fill" {
     }
 }
 
-fn sendAndSplit(command: []const u8, ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError || posix.WriteError)!mem.TokenIterator(u8, .scalar) {
-    _ = try posix.write(cmdStream.handle, command);
+fn sendAndSplit(command: []const u8, ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError || util.WriteError)!mem.TokenIterator(u8, .scalar) {
+    _ = try util.write(cmdStream.socket.handle, command);
     const bytes = try readCmd(ra);
     return mem.tokenizeScalar(u8, bytes, '\n');
 }
@@ -1070,7 +1070,7 @@ pub fn readCmd(ra: mem.Allocator) (MpdError || MemoryError || posix.ReadError)![
     var buffer: std.ArrayList(u8) = .empty;
 
     while (true) {
-        const n = try posix.read(cmdStream.handle, &readbuf);
+        const n = try posix.read(cmdStream.socket.handle, &readbuf);
         if (n == 0) break;
 
         buffer.appendSlice(ra, readbuf[0..n]) catch return MemoryError.AllocatorError;
@@ -1359,7 +1359,7 @@ fn escapeMpdString(allocator: mem.Allocator, str: []const u8) ![]u8 {
 }
 
 pub fn listAllData(respAllocator: std.mem.Allocator) ![]u8 {
-    _ = posix.write(cmdStream.handle, "listallinfo\n") catch return StreamError.WriteError;
+    _ = util.write(cmdStream.socket.handle, "listallinfo\n") catch return StreamError.WriteError;
     return try readCmd(respAllocator);
 }
 
@@ -1491,19 +1491,19 @@ pub fn addFromUri(allocator: mem.Allocator, uri: []const u8) !void {
 }
 
 pub fn batchInsertUri(uris: []const []const u8, pos: usize, ra: mem.Allocator) !void {
-    _ = posix.write(cmdStream.handle, "command_list_begin\n") catch return StreamError.WriteError;
+    _ = util.write(cmdStream.socket.handle, "command_list_begin\n") catch return StreamError.WriteError;
     for (uris, 1..uris.len + 1) |item, i| {
         const command = try fmt.allocPrint(ra, "add \"{s}\" {}\n", .{ item, pos + i });
-        _ = posix.write(cmdStream.handle, command) catch return StreamError.WriteError;
+        _ = util.write(cmdStream.socket.handle, command) catch return StreamError.WriteError;
     }
     try sendCommand("command_list_end\n");
 }
 
 pub fn addList(allocator: mem.Allocator, list: []const SongStringAndUri) !void {
-    _ = posix.write(cmdStream.handle, "command_list_begin\n") catch return StreamError.WriteError;
+    _ = util.write(cmdStream.socket.handle, "command_list_begin\n") catch return StreamError.WriteError;
     for (list) |item| {
         const command = try fmt.allocPrint(allocator, "add \"{s}\"\n", .{item.uri});
-        _ = posix.write(cmdStream.handle, command) catch return StreamError.WriteError;
+        _ = util.write(cmdStream.socket.handle, command) catch return StreamError.WriteError;
     }
     try sendCommand("command_list_end\n");
 }
