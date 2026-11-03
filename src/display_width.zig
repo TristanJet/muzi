@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const DisplayWidth = @import("DisplayWidth");
 const CodePointIterator = @import("code_point").Iterator;
 const ascii = @import("ascii");
+const Graphemes = @import("Graphemes");
 
 const util = @import("util.zig");
 const window = @import("window.zig");
@@ -13,7 +14,7 @@ const pers_alloc = @import("allocators.zig").persistentAllocator;
 const queue_cache_size = 100;
 const playing_cache_size = 20;
 
-var dw: DisplayWidth = undefined;
+const dw = DisplayWidth;
 var cache: Cache = undefined;
 
 pub const Width = struct {
@@ -154,12 +155,11 @@ fn HashQueue(n_str: usize) type {
 }
 
 pub fn init(alloc: Allocator, panels: Panels) !void {
-    dw = try DisplayWidth.init(alloc);
     cache = Cache.init(alloc, panels);
 }
 
 pub fn deinit(alloc: Allocator) void {
-    dw.deinit(alloc);
+    _ = alloc;
 }
 
 fn lookupWidth(max: usize, str: []const u8) Width {
@@ -179,7 +179,7 @@ fn lookupWidth(max: usize, str: []const u8) Width {
         };
     }
 
-    var giter = dw.graphemes.iterator(str);
+    var giter = Graphemes.iterator(str);
     var offset: usize = 0;
     while (giter.next()) |gc| {
         var cp_iter = CodePointIterator{ .bytes = gc.bytes(str) };

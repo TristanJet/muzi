@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("DisplayWidth", zg.module("DisplayWidth"));
     exe.root_module.addImport("code_point", zg.module("code_point"));
     exe.root_module.addImport("ascii", zg.module("ascii"));
+    exe.root_module.addImport("Graphemes", zg.module("Graphemes"));
 
     b.installArtifact(exe);
 
