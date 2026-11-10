@@ -18,7 +18,7 @@ muzi is available on the [AUR](https://aur.archlinux.org/packages/muzi)
 yay -S muzi
 ```
 
-To build muzi from source you need [Zig 0.15.2](https://ziglang.org/download/) and the zig standard library installed, running the following command in the source directory will build to ${SRC-DIR}/zig-out/bin/
+To build muzi from source you need [Zig 0.17.0](https://ziglang.org/download/) and the zig standard library installed, running the following command in the source directory will build to ${SRC-DIR}/zig-out/bin/
 
 ```bash
 zig build -Drelease=true
