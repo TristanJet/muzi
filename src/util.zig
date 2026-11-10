@@ -2,10 +2,14 @@ const std = @import("std");
 const builtin = @import("builtin");
 const fmt = std.fmt;
 const fs = std.fs;
+const Io = std.Io;
 const math = std.math;
 const mem = std.mem;
 const posix = std.posix;
-var logtty: fs.File = undefined;
+var logtty: Io.File = undefined;
+
+pub var io: Io = undefined;
+pub var environ: std.process.Environ = undefined;
 const state = @import("state.zig");
 const alloc = @import("allocators.zig");
 const lowerBuf1: []u8 = alloc.ptrLower1;
@@ -25,30 +29,31 @@ const logttypath = switch (builtin.os.tag) {
     else => @compileError("Unsupported OS"),
 };
 
-const DebugLog = if (builtin.mode == .Debug) struct {
+const DebugLog = if (builtin.mode == .debug) struct {
     buffer: [256]u8,
     n: u16,
 } else void;
 
-var debug_log: DebugLog = if (builtin.mode == .Debug) .{ .buffer = undefined, .n = 0 } else {};
+var debug_log: DebugLog = if (builtin.mode == .debug) .{ .buffer = undefined, .n = 0 } else {};
 
 var log_flag: bool = false;
 
 pub fn loggerInit(etty: ?T_NTTY, ltty: ?T_NTTY) !void {
     var buf: [16]u8 = undefined;
-    if (builtin.mode == .Debug) {
+    if (builtin.mode == .debug) {
         if (ltty) |n| {
             log_flag = true;
-            logtty = try fs.cwd().openFile(
+            logtty = try Io.Dir.cwd().openFile(
+                io,
                 try fmt.bufPrint(&buf, logttypath, .{n}),
                 .{
-                    .mode = fs.File.OpenMode.write_only,
+                    .mode = .write_only,
                     .allow_ctty = false,
                     .lock = .none,
                     .lock_nonblocking = false,
                 },
             );
-            _ = try posix.write(logtty.handle, "\x1B[2J");
+            _ = try write(logtty.handle, "\x1B[2J");
         }
 
         initErr(etty) catch return error.StdErrInitFailed;
@@ -56,25 +61,85 @@ pub fn loggerInit(etty: ?T_NTTY, ltty: ?T_NTTY) !void {
 }
 
 pub fn deinit() void {
-    if (builtin.mode == .Debug and log_flag) logtty.close();
+    if (builtin.mode == .debug and log_flag) logtty.close(io);
 }
 
 fn initErr(etty: ?T_NTTY) !void {
     var buf: [16]u8 = undefined;
-    const stderr_fd = fs.File.stderr().handle;
+    const stderr_fd = Io.File.stderr().handle;
     const path = if (etty) |n| try fmt.bufPrint(&buf, logttypath, .{n}) else "/dev/tty";
-    const errtty = try fs.cwd().openFile(path, .{ .mode = .write_only });
-    defer errtty.close();
+    const errtty = try Io.Dir.cwd().openFile(io, path, .{ .mode = .write_only });
+    defer errtty.close(io);
     // Redirect stderr to the target terminal's file descriptor
-    try posix.dup2(errtty.handle, stderr_fd);
+    try dup2(errtty.handle, stderr_fd);
 }
 
 pub fn log(comptime format: []const u8, args: anytype) void {
-    if (builtin.mode == .Debug and log_flag) {
+    if (builtin.mode == .debug and log_flag) {
         const msg = fmt.bufPrint(&debug_log.buffer, format ++ "\n", args) catch "ERROR FORMATTING";
         const no = fmt.bufPrint(debug_log.buffer[msg.len..], "{} -> ", .{debug_log.n}) catch unreachable;
-        _ = posix.writev(logtty.handle, &.{ .{ .base = no.ptr, .len = no.len }, .{ .base = msg.ptr, .len = msg.len } }) catch return;
+        _ = writev(logtty.handle, &.{ .{ .base = no.ptr, .len = no.len }, .{ .base = msg.ptr, .len = msg.len } }) catch return;
         debug_log.n += 1;
+    }
+}
+
+pub fn milliTimestamp() i64 {
+    return Io.Timestamp.now(io, .real).toMilliseconds();
+}
+
+pub fn sleep(ns: u64) void {
+    io.sleep(.fromNanoseconds(ns), .awake) catch {};
+}
+
+// Replacements for std.posix wrappers removed in Zig 0.16
+pub const WriteError = error{ WouldBlock, BrokenPipe, NoSpaceLeft, Unexpected };
+
+pub fn write(fd: posix.fd_t, bytes: []const u8) WriteError!usize {
+    while (true) {
+        const rc = posix.system.write(fd, bytes.ptr, bytes.len);
+        switch (posix.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .INTR => continue,
+            .AGAIN => return error.WouldBlock,
+            .PIPE => return error.BrokenPipe,
+            .NOSPC => return error.NoSpaceLeft,
+            else => |e| return posix.unexpectedErrno(e),
+        }
+    }
+}
+
+pub fn writev(fd: posix.fd_t, iov: []const posix.iovec_const) WriteError!usize {
+    while (true) {
+        const rc = posix.system.writev(fd, iov.ptr, @intCast(iov.len));
+        switch (posix.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .INTR => continue,
+            .AGAIN => return error.WouldBlock,
+            .PIPE => return error.BrokenPipe,
+            .NOSPC => return error.NoSpaceLeft,
+            else => |e| return posix.unexpectedErrno(e),
+        }
+    }
+}
+
+pub fn fcntl(fd: posix.fd_t, cmd: i32, arg: usize) error{Unexpected}!usize {
+    while (true) {
+        const rc = posix.system.fcntl(fd, cmd, arg);
+        switch (posix.errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .INTR => continue,
+            else => |e| return posix.unexpectedErrno(e),
+        }
+    }
+}
+
+pub fn dup2(old_fd: posix.fd_t, new_fd: posix.fd_t) error{Unexpected}!void {
+    while (true) {
+        switch (posix.errno(posix.system.dup2(old_fd, new_fd))) {
+            .SUCCESS => return,
+            .INTR, .BUSY => continue,
+            else => |e| return posix.unexpectedErrno(e),
+        }
     }
 }
 

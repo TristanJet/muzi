@@ -28,7 +28,7 @@
 
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.15.2",
+    .minimum_zig_version = "0.17.0",
 
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
@@ -37,8 +37,8 @@
     // internet connectivity.
     .dependencies = .{
         .zg = .{
-            .url = "https://codeberg.org/atman/zg/archive/v0.15.3.tar.gz",
-            .hash = "zg-0.15.2-oGqU3PlHtAIe8e9FTY8FDZcl329U2LYuDvRaREomHIwH",
+            .url = "https://codeberg.org/atman/zg/archive/v0.18.0.tar.gz",
+            .hash = "zg-0.18.0-oGqU3MjboAJAkIdf1n_G20BmpEZs_f30RMCacLPVlTXU",
         },
     },
     .paths = .{

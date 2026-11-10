@@ -20,7 +20,7 @@ const helpmsg =
     \\
 ;
 
-const debugmsg = if (builtin.mode == .Debug)
+const debugmsg = if (builtin.mode == .debug)
     std.fmt.comptimePrint(
         \\Debug-only options:
         \\-e, --etty <{s}>       TTY device (/dev/pts/{{n}}) which stderr will write to, leave empty for default: /dev/tty
@@ -72,7 +72,7 @@ pub const OptionValues = struct {
     ltty: ?util.T_NTTY,
 };
 
-pub fn handleArgs() !OptionValues {
+pub fn handleArgs(process_args: proc.Args) !OptionValues {
     var arg_val = OptionValues{
         .host = null,
         .port = null,
@@ -81,7 +81,7 @@ pub fn handleArgs() !OptionValues {
         .etty = null,
         .ltty = null,
     };
-    var args = proc.args();
+    var args = process_args.iterate();
     _ = args.skip();
     while (args.next()) |arg| {
         if (mem.eql(u8, arg, "-p") or mem.eql(u8, arg, "--port")) {
@@ -93,10 +93,10 @@ pub fn handleArgs() !OptionValues {
             arg_val.host = validIpv4(val) catch return InvalidIPv4Error.InvalidHost;
         } else if (mem.eql(u8, arg, "-h") or mem.eql(u8, arg, "--help")) {
             arg_val.help = true;
-            if (builtin.mode == .Debug) {
+            if (builtin.mode == .debug) {
                 const tty = try getTty();
-                defer tty.close();
-                _ = try posix.writev(tty.handle, &.{ .{ .base = helpmsg, .len = helpmsg.len }, .{ .base = debugmsg, .len = debugmsg.len } });
+                defer tty.close(util.io);
+                _ = try util.writev(tty.handle, &.{ .{ .base = helpmsg, .len = helpmsg.len }, .{ .base = debugmsg, .len = debugmsg.len } });
             } else {
                 try write(helpmsg[0..]);
             }
@@ -104,12 +104,12 @@ pub fn handleArgs() !OptionValues {
             arg_val.version = true;
             try write(version[0..] ++ "\n");
         } else if (mem.eql(u8, arg, "-e") or mem.eql(u8, arg, "--etty")) {
-            if (builtin.mode != .Debug) return error.InvalidOption;
+            if (builtin.mode != .debug) return error.InvalidOption;
             const val = args.next() orelse return error.InvalidOption;
             const tty = fmt.parseUnsigned(util.T_NTTY, val, 10) catch return error.InvalidOption;
             arg_val.etty = tty;
         } else if (mem.eql(u8, arg, "-l") or mem.eql(u8, arg, "--ltty")) {
-            if (builtin.mode != .Debug) return error.InvalidOption;
+            if (builtin.mode != .debug) return error.InvalidOption;
             const val = args.next() orelse return error.InvalidOption;
             const tty = fmt.parseUnsigned(util.T_NTTY, val, 10) catch return error.InvalidOption;
             arg_val.ltty = tty;
@@ -121,8 +121,9 @@ pub fn handleArgs() !OptionValues {
     return arg_val;
 }
 
-fn getTty() !fs.File {
-    const file = try fs.cwd().openFile(
+fn getTty() !std.Io.File {
+    const file = try std.Io.Dir.cwd().openFile(
+        util.io,
         "/dev/tty",
         .{ .mode = .write_only },
     );
@@ -131,8 +132,8 @@ fn getTty() !fs.File {
 
 fn write(msg: []const u8) !void {
     const tty = try getTty();
-    defer tty.close();
-    _ = try posix.write(tty.handle, msg);
+    defer tty.close(util.io);
+    _ = try util.write(tty.handle, msg);
 }
 
 pub const InvalidIPv4Error = error{

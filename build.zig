@@ -3,13 +3,13 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = .ReleaseFast,
+        .preferred_optimize_mode = .fast,
     });
 
     const zg = b.dependency("zg", .{});
 
     const exe = b.addExecutable(.{
-        .name = if (optimize == .ReleaseFast) "muzi" else "out",
+        .name = if (optimize == .fast) "muzi" else "out",
         .root_module = b.createModule(.{
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
@@ -26,15 +26,14 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("DisplayWidth", zg.module("DisplayWidth"));
     exe.root_module.addImport("code_point", zg.module("code_point"));
     exe.root_module.addImport("ascii", zg.module("ascii"));
+    exe.root_module.addImport("Graphemes", zg.module("Graphemes"));
 
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
 
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);

@@ -17,6 +17,7 @@ const heap = std.heap;
 const log = @import("util.zig").log;
 
 const alloc = @import("allocators.zig");
+const util = @import("util.zig");
 const stringLowerBuf1 = alloc.ptrLower1;
 const stringLowerBuf2 = alloc.ptrLower2;
 const wrkallocator = alloc.wrkallocator;
@@ -912,7 +913,7 @@ fn handleIdle(idle_event: Idle, app: *State, render_state: *RenderState(n_browse
             app.song = try mpd.getCurrentSong(alloc.respAllocator, songtime);
             app.last_elapsed = app.song.?.time.elapsed;
             //lazy
-            app.last_second = @divTrunc(time.milliTimestamp(), 1000);
+            app.last_second = @divTrunc(util.milliTimestamp(), 1000);
             app.bar_init = true;
             render_state.bar = true;
             render_state.queueEffects = true;
